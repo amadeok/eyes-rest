@@ -1,14 +1,23 @@
+import keyboard
+from time import sleep
+from pynput.mouse import Controller
 from contextlib import nullcontext
 from logging import disable
-import pyautogui, threading, sys, msvcrt
+import pyautogui
+import threading
+import sys
+import msvcrt
 from time import time, sleep
 import PySimpleGUI as sg
 import datetime
 from ctypes import *
-import win32gui, win32file
+import win32gui
+import win32file
 import re
 import win32com.client
-import pythoncom, pyHook, os
+import pythoncom
+import pyHook
+import os
 from threading import Timer
 from playsound import playsound
 
@@ -21,13 +30,16 @@ block_input = 1
 force_rest_time = 1
 size = pyautogui.size()
 
+
 class context:
     def __init__(self):
         self.window = None
 
+
 ctx = context()
 
-def locate_usb():#this will check any external Drives
+
+def locate_usb():  # this will check any external Drives
     drive_list = []
     drivebits = win32file.GetLogicalDrives()
     # print(drivebits)
@@ -41,35 +53,40 @@ def locate_usb():#this will check any external Drives
                 drive_list.append(drname)
     return drive_list
 
+
 class blockInput():
-    def OnKeyboardEvent(self,event):
+    def OnKeyboardEvent(self, event):
         return False
 
-    def OnMouseEvent(self,event):
+    def OnMouseEvent(self, event):
         return False
 
     def unblock(self):
 
-        try: self.hm.UnhookKeyboard()
-        except: pass
-        try: self.hm.UnhookMouse()
-        except: pass
+        try:
+            self.hm.UnhookKeyboard()
+        except:
+            pass
+        try:
+            self.hm.UnhookMouse()
+        except:
+            pass
 
-    def block(self ,keyboard = True, mouse = True):
-    
+    def block(self, keyboard=True, mouse=True):
+
         while(1):
             if mouse:
-                  self.hm.MouseAll = self.OnMouseEvent
-                  self.hm.HookMouse()
+                self.hm.MouseAll = self.OnMouseEvent
+                self.hm.HookMouse()
             if keyboard:
-                  self.hm.KeyAll = self.OnKeyboardEvent
-                  self.hm.HookKeyboard()
+                self.hm.KeyAll = self.OnKeyboardEvent
+                self.hm.HookKeyboard()
             win32gui.PumpWaitingMessages()
-            cg= locate_usb()
-            if cg:
-                break
+            # cg = locate_usb()
+            # if cg:
+            #    break
             sleep(0.1)
-      
+
     def __init__(self):
         self.hm = pyHook.HookManager()
 
@@ -86,34 +103,79 @@ def put_on_foreground():
             win32gui.SetForegroundWindow(i[0])
             found = True
             return True
-    if found == False: print("Window not found")
+    if found == False:
+        print("Window not found")
     return False
+
 
 if os.path.isfile(conf_file):
     print("Reading settings file..")
     try:
         with open(conf_file, 'r') as input_:
             settings = input_.read().splitlines()
-            if len(settings): pop_up_every = int(settings[0].split(":")[1])*60
-            if len(settings) > 1: pop_up_duration = int(settings[1].split(":")[1])
-            if len(settings) > 2:play_sound = int(settings[2].split(":")[1])
-            if len(settings) > 3: block_input = int(settings[3].split(":")[1])
+            if len(settings):
+                pop_up_every = int(settings[0].split(":")[1])*60
+            if len(settings) > 1:
+                pop_up_duration = int(settings[1].split(":")[1])
+            if len(settings) > 2:
+                play_sound = int(settings[2].split(":")[1])
+            if len(settings) > 3:
+                block_input = int(settings[3].split(":")[1])
 
-    except Exception as e: print("Error while reading settings file:", e)
+    except Exception as e:
+        print("Error while reading settings file:", e)
 
 if block_input:
     force_rest_time = 1
-else: force_rest_time = 0
+else:
+    force_rest_time = 0
+
 
 def is_enabled(setting):
-    if setting: return "enabled";
-    else: return "disabled"
+    if setting:
+        return "enabled"
+    else:
+        return "disabled"
+
 
 block = blockInput()
 sg.theme('DarkAmber')
 
-print(f"Starting..\nPop up every {pop_up_every/60} minutes with duration {pop_up_duration} seconds")
-print(f"Playing sound before pop up is {is_enabled(play_sound)}, blocking input during pop up is {is_enabled(block_input)}")
+
+def blockinput_start():
+    mouse = Controller()
+    global block_input_flag
+    for i in range(150):
+        keyboard.block_key(i)
+    while block_input_flag == 1:
+        mouse.position = (0, 0)
+        sleep(0.01)
+
+
+def blockinput_stop():
+    global block_input_flag
+    for i in range(150):
+        keyboard.unblock_key(i)
+    block_input_flag = 0
+
+
+def blockinput():
+    global block_input_flag
+    block_input_flag = 1
+    t1 = threading.Thread(target=blockinput_start)
+    t1.start()
+    print("[SUCCESS] Input blocked!")
+
+
+def unblockinput():
+    blockinput_stop()
+    print("[SUCCESS] Input unblocked!")
+
+
+print(
+    f"Starting..\nPop up every {pop_up_every/60} minutes with duration {pop_up_duration} seconds")
+print(
+    f"Playing sound before pop up is {is_enabled(play_sound)}, blocking input during pop up is {is_enabled(block_input)}")
 args = sys.argv
 if len(args) == 3:
     pop_up_every = int(args[1])
@@ -123,85 +185,95 @@ prev_time = time()
 prev_time2 = time()
 exiting = False
 
+
 def check_key_presses():
-    global exiting,pop_up_every,pop_up_duration, prev_time2
+    global exiting, pop_up_every, pop_up_duration, prev_time2
     while 1:  # ESC
         x = msvcrt.getch().decode('UTF-8')
         if x == 'r':
             prev_time2 = time()
             print("Timer resetted")
         elif x == '1':
-            pop_up_every-=60
+            pop_up_every -= 60
             print("Pop up every ", pop_up_every/60, " minutes")
         elif x == '2':
-            pop_up_every+=60
-            print("Pop up every ", pop_up_every/60 , " minutes")
+            pop_up_every += 60
+            print("Pop up every ", pop_up_every/60, " minutes")
         elif x == '3':
-            pop_up_duration-=1
+            pop_up_duration -= 1
             print("Pop up duration ", pop_up_duration, " seconds")
         elif x == '4':
-            pop_up_duration+=1
+            pop_up_duration += 1
             print("Pop up duration ", pop_up_duration, " seconds")
         elif x == 'q':
             print("exiting")
             exiting = True
             sys.exit()
 
+
 print("Starting key press checker..")
 thread1 = threading.Thread(target=check_key_presses,)
 thread1.start()
 thread_reminder_delta = 0
 
+
 def thread_reminder(seconds, ctx):
-    
+
     prev_time = time()
     global thread_reminder_delta
     time_string = ""
     print(f"Showing pop up..")
     try:
-        while time() - prev_time < seconds :
-            if block_input: block.block()
-            sleep(1)
-            if block_input: block.unblock()
-            
+        while time() - prev_time < seconds:
+            if block_input:
+                blockinput()
+                sleep(1)
+                unblockinput()
+            else:
+                sleep(1)
+
             thread_reminder_delta = seconds - (time() - prev_time)
             time_string = f'Pop up will close in:  {format(seconds - (time() - prev_time), ".2f")} seconds'
             print(time_string)
             if ctx.window != None:
                 ctx.window['-TEXT-'].update(time_string)
-            elif not force_rest_time: break
+            elif not force_rest_time:
+                break
 
-    except Exception as e: 
-        print ("error ", e)
+    except Exception as e:
+        print("error ", e)
 
     thread_reminder_delta = 0
     try:
-        if ctx.window != None:ctx.window.write_event_value('Alarm', "1 minute passed")
-    except Exception as e: 
-        print ("error ", e) 
-    
+        if ctx.window != None:
+            ctx.window.write_event_value('Alarm', "1 minute passed")
+    except Exception as e:
+        print("error ", e)
+
 
 print("Starting loop..")
 
 while 1:
     exiting = False
-    #layout = [ [sg.Button('Close')],[sg.Text('', key='-TEXT-', justification='center')] ]
-    #window = sg.Window('Eyes rest pop up', layout,size=(size.width, size.height))
+    # layout = [ [sg.Button('Close')],[sg.Text('', key='-TEXT-', justification='center')] ]
+    # window = sg.Window('Eyes rest pop up', layout,size=(size.width, size.height))
 
-    column_to_be_centered = [  [sg.Text('Eyes rest')],
-                [sg.Text(size=(30,1), key='-TEXT-')],
-                [sg.Button('Exit')]  ]
+    column_to_be_centered = [[sg.Text('Eyes rest')],
+                             [sg.Text(size=(30, 1), key='-TEXT-')],
+                             [sg.Button('Exit')]]
 
     layout = [[sg.Text(key='-EXPAND-', font='ANY 1', pad=(0, 0))],  # the thing that expands from top
-              [sg.Text('', pad=(0,0),key='-EXPAND2-'),  
+              [sg.Text('', pad=(0, 0), key='-EXPAND2-'),
               sg.Column(column_to_be_centered, vertical_alignment='center', justification='center',  k='-C-')]]
 
-    ctx.window = sg.Window('Eyes Rest', layout, resizable=True,finalize=True, size=(size.width, size.height))
+    ctx.window = sg.Window('Eyes Rest', layout, resizable=True,
+                           finalize=True, size=(size.width, size.height))
     ctx.window['-C-'].expand(True, True, True)
     ctx.window['-EXPAND-'].expand(True, True, True)
     ctx.window['-EXPAND2-'].expand(True, False, True)
 
-    threading.Thread(target=thread_reminder, args=(pop_up_duration, ctx), daemon=True).start()
+    threading.Thread(target=thread_reminder, args=(
+        pop_up_duration, ctx), daemon=True).start()
 
     while True:
         event, values = ctx.window.read()
@@ -220,22 +292,31 @@ while 1:
         prev_time = time()
         if thread_reminder_delta > 0:
             while time() - prev_time < thread_reminder_delta:
-                if block_input: block.block()
-                sleep(1)
-                if block_input: block.unblock()
-                print(f"Pause time remaining  {(format(thread_reminder_delta - (time() - prev_time), '.2f'))} seconds")
+                if block_input:
+                    blockinput()
+                    sleep(1)
+                    unblockinput()
+                else:
+                    sleep(1)
+                print(
+                    f"Pause time remaining  {(format(thread_reminder_delta - (time() - prev_time), '.2f'))} seconds")
 
     prev_time2 = time()
     while (time() - prev_time2 < pop_up_every):
         if play_sound:
             if pop_up_every - (time() - prev_time2) < 9:
                 print("Playing alarm sound..")
-                try: playsound(audio_file)
+                try:
+                    playsound(audio_file)
                 except Exception as e:
                     print("Error playing sound: ", e)
-                    print("Try installing playsound 1.2.2: pip install playsound==1.2.2")
+                    print(
+                        "Try installing playsound 1.2.2: pip install playsound==1.2.2")
 
-        if exiting: sys.exit()
+        if exiting:
+            sys.exit()
         delta = pop_up_every - (time() - prev_time2)
-        print(f" Time until next pop up: " + '{:0>4},'.format(str(datetime.timedelta(seconds=delta))))# + f" Current time: {time():1f}, previous time: {prev_time2:1f}")
+        # + f" Current time: {time():1f}, previous time: {prev_time2:1f}")
+        print(f" Time until next pop up: " +
+              '{:0>4},'.format(str(datetime.timedelta(seconds=delta))))
         sleep(5)
