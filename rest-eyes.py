@@ -16,12 +16,16 @@ import win32file
 import re
 import win32com.client
 import pythoncom
-import pyHook
+try:
+    import pyHook
+except:
+    print(r"failed to load pyHook, use python 3.7 and run C:\Users\user\AppData\Local\Programs\Python\Python37\python -m pip install pyHook-1.5.1-cp37-cp37m-win_amd64.whl")
+    exit()
 import os
 from threading import Timer
 from playsound import playsound
 
-audio_file = os.path.dirname(__file__)+"\\alarm.mp3"
+audio_file = os.path.dirname(__file__)+"\\alarm.wav"
 conf_file = os.path.dirname(__file__)+"\\settings.conf"
 pop_up_every = 10*60
 pop_up_duration = 20
