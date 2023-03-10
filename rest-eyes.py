@@ -139,7 +139,7 @@ def is_enabled(setting):
 
 
 block = blockInput()
-sg.theme('DarkAmber')
+sg.theme('Black')
 
 
 def blockinput_start():
@@ -267,7 +267,7 @@ while 1:
               sg.Column(column_to_be_centered, vertical_alignment='center', justification='center',  k='-C-')]]
 
     ctx.window = sg.Window('Eyes Rest', layout, resizable=True,
-                           finalize=True, size=(size.width, size.height))
+                           finalize=True, size=(size.width, size.height), no_titlebar=True)
     ctx.window['-C-'].expand(True, True, True)
     ctx.window['-EXPAND-'].expand(True, True, True)
     ctx.window['-EXPAND2-'].expand(True, False, True)
