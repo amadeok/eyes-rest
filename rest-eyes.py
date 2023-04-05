@@ -192,8 +192,13 @@ exiting = False
 
 def check_key_presses():
     global exiting, pop_up_every, pop_up_duration, prev_time2
+    x = ""
     while 1:  # ESC
-        x = msvcrt.getch().decode('UTF-8')
+        try:
+            x = msvcrt.getch().decode('UTF-8')
+        except Exception as e:
+            print(e)
+            continue
         if x == 'r':
             prev_time2 = time()
             print("Timer resetted")
