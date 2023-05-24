@@ -1,4 +1,4 @@
-import keyboard
+import keyboard, pygetwindow as gw
 from time import sleep
 from pynput.mouse import Controller
 from contextlib import nullcontext
@@ -280,6 +280,14 @@ while 1:
     ctx.window['-C-'].expand(True, True, True)
     ctx.window['-EXPAND-'].expand(True, True, True)
     ctx.window['-EXPAND2-'].expand(True, False, True)
+    
+    w = gw.getWindowsWithTitle('Eyes Rest')
+    for x in range(5):
+        try:
+            sleep(0.1)
+            win32gui.SetForegroundWindow(w[0]._hWnd)
+            break
+        except:pass
 
     threading.Thread(target=thread_reminder, args=(
         pop_up_duration, ctx), daemon=True).start()

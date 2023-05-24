@@ -1,1 +1,1 @@
-C:\Users\user\AppData\Local\Programs\Python\Python37\python -m pip install pyautogui pywin32 pysimplegui playsound pyHook-1.5.1-cp37-cp37m-win_amd64.whl
+C:\Users\user\AppData\Local\Programs\Python\Python37\python -m pip install pyautogui pywin32 pysimplegui playsound pyHook-1.5.1-cp37-cp37m-win_amd64.whl keyboard pynput
