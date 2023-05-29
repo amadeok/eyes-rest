@@ -199,7 +199,7 @@ def check_key_presses():
         except Exception as e:
             print(e)
             continue
-        if x == 'r':
+        if x == 'r' or x == "R":
             prev_time2 = time()
             print("Timer resetted")
         elif x == '1':
@@ -214,10 +214,20 @@ def check_key_presses():
         elif x == '4':
             pop_up_duration += 1
             print("Pop up duration ", pop_up_duration, " seconds")
-        elif x == 'q':
+        elif x == 'q' or x == 'Q':
             print("exiting")
             exiting = True
             sys.exit()
+        elif x == 'k' or x == 'K':
+            global block_input; global force_rest_time
+            block_input = not block_input
+            force_rest_time = not force_rest_time
+            print(f"{'Not b' if not block_input else 'B'}locking input during popup")
+        elif x == "s" or x == "S":
+            global play_sound
+            play_sound = not play_sound
+            print(f"{'Not p' if not play_sound else 'P'}laying sound before popup")
+            
 
 
 print("Starting key press checker..")
