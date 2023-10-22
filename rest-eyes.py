@@ -3,7 +3,7 @@ from time import sleep
 from pynput.mouse import Controller
 from contextlib import nullcontext
 from logging import disable
-import pyautogui
+import pyautogui, winsound
 import threading
 import sys
 import msvcrt
@@ -334,7 +334,11 @@ while 1:
             if pop_up_every - (time() - prev_time2) < 9:
                 print("Playing alarm sound..")
                 try:
-                    playsound(audio_file)
+                    for x in range(3):
+                        winsound.Beep(400, 500)
+                        sleep(0.1)
+
+                    #playsound(audio_file)
                 except Exception as e:
                     print("Error playing sound: ", e)
                     print(
