@@ -19,7 +19,7 @@ import pythoncom
 try:
     import pyHook
 except:
-    print(r"failed to load pyHook, use python 3.7 and run C:\Users\user\AppData\Local\Programs\Python\Python37\python -m pip install pyHook-1.5.1-cp37-cp37m-win_amd64.whl")
+    print(r"failed to load pyHook, use python 3.7 and run C:\Users\%USERNAME%\AppData\Local\Programs\Python\Python37\python -m pip install pyHook-1.5.1-cp37-cp37m-win_amd64.whl")
     exit()
 import os
 from threading import Timer
@@ -111,23 +111,36 @@ def put_on_foreground():
         print("Window not found")
     return False
 
+import configparser
 
-if os.path.isfile(conf_file):
-    print("Reading settings file..")
-    try:
-        with open(conf_file, 'r') as input_:
-            settings = input_.read().splitlines()
-            if len(settings):
-                pop_up_every = int(settings[0].split(":")[1])*60
-            if len(settings) > 1:
-                pop_up_duration = int(settings[1].split(":")[1])
-            if len(settings) > 2:
-                play_sound = int(settings[2].split(":")[1])
-            if len(settings) > 3:
-                block_input = int(settings[3].split(":")[1])
+config = configparser.ConfigParser()
 
-    except Exception as e:
-        print("Error while reading settings file:", e)
+config.read('settings.ini')
+
+# Access the settings
+pop_up_every = config.getint('PopupSettings', 'Pop up every (minutes)')*60
+pop_up_duration = config.getint('PopupSettings', 'Pop up duration (seconds)')
+play_sound = config.getboolean('PopupSettings', 'Play sound before pop up')
+block_input = config.getboolean('PopupSettings', 'Block mouse and keyboard during pop up')
+press_key = config.get('PopupSettings', 'Press key before and after popup')
+press_key_active = len(press_key)
+
+# if os.path.isfile(conf_file):
+#     print("Reading settings file..")
+#     try:
+#         with open(conf_file, 'r') as input_:
+#             settings = input_.read().splitlines()
+#             if len(settings):
+#                 pop_up_every = int(settings[0].split(":")[1])*60
+#             if len(settings) > 1:
+#                 pop_up_duration = int(settings[1].split(":")[1])
+#             if len(settings) > 2:
+#                 play_sound = int(settings[2].split(":")[1])
+#             if len(settings) > 3:
+#                 block_input = int(settings[3].split(":")[1])
+
+#     except Exception as e:
+#         print("Error while reading settings file:", e)
 
 if block_input:
     force_rest_time = 1
@@ -227,6 +240,11 @@ def check_key_presses():
             global play_sound
             play_sound = not play_sound
             print(f"{'Not p' if not play_sound else 'P'}laying sound before popup")
+        elif x == "p" or x == "P":
+            global press_key_active
+            global press_key
+            press_key_active = not press_key_active
+            print(f"{'Not p' if not press_key_active else 'P'}ressing key  {press_key} before and after popup")
             
 
 
@@ -272,12 +290,22 @@ def thread_reminder(seconds, ctx):
 
 print("Starting loop..")
 
+def   press_key_fun(press_key):
+    print("pressing key ", press_key)
+    pyautogui.press(press_key)
+    sleep(0.1)
+
 while 1:
     exiting = False
     # layout = [ [sg.Button('Close')],[sg.Text('', key='-TEXT-', justification='center')] ]
     # window = sg.Window('Eyes rest pop up', layout,size=(size.width, size.height))
-
-    column_to_be_centered = [[sg.Text('Eyes rest')],
+    aw = gw.getActiveWindow()
+    mpos = pyautogui.position()
+    print("aw is ", aw.title if aw else "no window")
+    if press_key_active:
+        press_key_fun(press_key)
+    
+    column_to_be_centered = [[sg.Text('Eyes Rest')],
                              [sg.Text(size=(30, 1), key='-TEXT-')],
                              [sg.Button('Exit')]]
 
@@ -297,10 +325,10 @@ while 1:
             sleep(0.1)
             win32gui.SetForegroundWindow(w[0]._hWnd)
             break
-        except:pass
+        except:
+            print("error");pass
 
-    threading.Thread(target=thread_reminder, args=(
-        pop_up_duration, ctx), daemon=True).start()
+    threading.Thread(target=thread_reminder, args=(pop_up_duration, ctx), daemon=True).start()
 
     while True:
         event, values = ctx.window.read()
@@ -327,7 +355,25 @@ while 1:
                     sleep(1)
                 print(
                     f"Pause time remaining  {(format(thread_reminder_delta - (time() - prev_time), '.2f'))} seconds")
-
+                
+    if block_input:
+        pyautogui.moveTo(mpos)
+        #winsound.Beep(600, 200)
+    
+    if aw:
+        try:
+            print("restoring previous active window ", aw.title)
+            win32gui.SetForegroundWindow(aw._hWnd) 
+            sleep(0.1)
+            print("active win", gw.getActiveWindow().title)
+        except: 
+            print("error restoring active window")
+    else: print("not restoring active window because not window")        
+    
+    
+    if press_key_active:
+        press_key_fun(press_key)    
+        
     prev_time2 = time()
     while (time() - prev_time2 < pop_up_every):
         if play_sound:
