@@ -118,12 +118,13 @@ config = configparser.ConfigParser()
 config.read('settings.ini')
 
 # Access the settings
-pop_up_every = config.getint('PopupSettings', 'Pop up every (minutes)')*60
+pop_up_every = config.getfloat('PopupSettings', 'Pop up every (minutes)')*60
 pop_up_duration = config.getint('PopupSettings', 'Pop up duration (seconds)')
 play_sound = config.getboolean('PopupSettings', 'Play sound before pop up')
 block_input = config.getboolean('PopupSettings', 'Block mouse and keyboard during pop up')
 press_key = config.get('PopupSettings', 'Press key before and after popup')
 press_key_active = len(press_key)
+click_on_win_center = config.getboolean('PopupSettings', 'Click on center of active window')
 
 # if os.path.isfile(conf_file):
 #     print("Reading settings file..")
@@ -245,7 +246,10 @@ def check_key_presses():
             global press_key
             press_key_active = not press_key_active
             print(f"{'Not p' if not press_key_active else 'P'}ressing key  {press_key} before and after popup")
-            
+        elif x == "c" or x == "C":
+            global click_on_win_center
+            click_on_win_center = not click_on_win_center
+            print(f"{'Not c' if not press_key_active else 'C'}licking on active window before and after popup")
 
 
 print("Starting key press checker..")
@@ -302,9 +306,13 @@ while 1:
     aw = gw.getActiveWindow()
     mpos = pyautogui.position()
     print("aw is ", aw.title if aw else "no window")
+
+    if aw and click_on_win_center:
+        pyautogui.click(aw.center)
+        
     if press_key_active:
         press_key_fun(press_key)
-    
+        
     column_to_be_centered = [[sg.Text('Eyes Rest')],
                              [sg.Text(size=(30, 1), key='-TEXT-')],
                              [sg.Button('Exit')]]
@@ -356,9 +364,7 @@ while 1:
                 print(
                     f"Pause time remaining  {(format(thread_reminder_delta - (time() - prev_time), '.2f'))} seconds")
                 
-    if block_input:
-        pyautogui.moveTo(mpos)
-        #winsound.Beep(600, 200)
+
     
     if aw:
         try:
@@ -370,10 +376,15 @@ while 1:
             print("error restoring active window")
     else: print("not restoring active window because not window")        
     
+    if aw and click_on_win_center:
+        pyautogui.click(aw.center)
     
     if press_key_active:
         press_key_fun(press_key)    
         
+    if aw and click_on_win_center or block_input:
+        pyautogui.moveTo(mpos)
+        #winsound.Beep(600, 200)
     prev_time2 = time()
     while (time() - prev_time2 < pop_up_every):
         if play_sound:
