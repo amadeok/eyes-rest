@@ -377,7 +377,10 @@ while 1:
     else: print("not restoring active window because not window")        
     
     if aw and click_on_win_center:
-        pyautogui.click(aw.center)
+        try:
+            pyautogui.click(aw.center)
+        except Exception as e:
+            print("Error clicking", e)
     
     if press_key_active:
         press_key_fun(press_key)    
