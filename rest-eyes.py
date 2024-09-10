@@ -31,7 +31,7 @@ pop_up_every = 10*60
 pop_up_duration = 20
 play_sound = 1
 block_input = 1
-force_rest_time = 1
+force_rest_time = 1  
 size = pyautogui.size()
 
 
@@ -249,13 +249,13 @@ def check_key_presses():
         elif x == "c" or x == "C":
             global click_on_win_center
             click_on_win_center = not click_on_win_center
-            print(f"{'Not c' if not press_key_active else 'C'}licking on active window before and after popup")
+            print(f"{'Not c' if not click_on_win_center else 'C'}licking on active window before and after popup")
 
 
 print("Starting key press checker..")
 thread1 = threading.Thread(target=check_key_presses,)
 thread1.start()
-thread_reminder_delta = 0
+thread_reminder_delta = 0  
 
 
 def thread_reminder(seconds, ctx):
