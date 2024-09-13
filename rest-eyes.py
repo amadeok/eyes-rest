@@ -1,5 +1,5 @@
 import keyboard, pygetwindow as gw
-from time import sleep
+#from time import sleep
 from pynput.mouse import Controller
 from contextlib import nullcontext
 from logging import disable
@@ -7,11 +7,11 @@ import pyautogui, winsound
 import threading
 import sys
 import msvcrt
-from time import time, sleep
+#from time import time, sleep
 import PySimpleGUI as sg
 import datetime
 from ctypes import *
-import win32gui
+import win32gui, time
 import win32file
 import re
 import win32com.client
@@ -26,6 +26,8 @@ except:
 import os
 from threading import Timer
 from playsound import playsound
+
+print("Install 'Add URL To Window Title' chrome extension for website url to appear in window title ")
 
 audio_file = os.path.dirname(__file__)+"\\alarm.wav"
 conf_file = os.path.dirname(__file__)+"\\settings.conf"
@@ -45,30 +47,45 @@ class context:
 ctx = context()
 
 class pauseHandleAction():
-    def __init__(self, press_keys=[], click=False, in_win_title="", in_exe_path="", fun=None) -> None:
-        self.in_win_title = in_win_title
-        self.in_exe_path = in_exe_path
-        self.press_keys = press_keys
-        if not type( self.press_keys) == list or not type(self.press_keys) == tuple:
-            self.press_keys = [self.press_keys]
+    def __init__(self, press_keys=[], click=False, in_win_title=[], in_exe_path=[], fun=None) -> None:
+        to_list = my_utils.util_.to_list
+        rem_empty = my_utils.util_.rem_empty_str
+        self.in_win_title = rem_empty(to_list(in_win_title))
+        self.in_exe_path = rem_empty(to_list(in_exe_path))
+        self.press_keys = rem_empty(to_list(press_keys))
         self.click = click
         self.fun = fun
+        
     def check(self):
-        path = None
-        title = None
-        if self.in_exe_path and len(self.in_exe_path):
+        in_path = None
+        in_title = None
+        need_path = len(self.in_exe_path)
+        need_title = len(self.in_win_title)
+        
+        if need_path:# and len(self.in_exe_path):
             path = my_utils.util_.get_path_from_hwd(gw.getActiveWindow()._hWnd)
-        if self.in_win_title and len(self.in_win_title):
+            in_path = any(item in path for item in self.in_exe_path if len(item))
+                
+        if need_title:# and len(self.in_win_title):
             title = gw.getActiveWindowTitle()
+            in_title = any(item in title.lower() for item in self.in_win_title if len(item))
+
+        do = False
+        if need_path and need_title:
+            do = in_path and in_title
+        elif need_path and not need_title:
+            do = in_path
+        elif not need_path and need_title:
+            do = in_title
+        else:
+            do = True            
         
-        do = False or not path and not title
-        
-        if path:
-            if self.in_exe_path in path:
-                do = True
-        if title:
-            if self.in_win_title in title:
-                do = True
+        # if path:
+        #     if self.in_exe_path in path.lower():
+        #         do = False
+        # if title:
+        #     if self.in_win_title in title.lower():
+        #         do = False
                 
         return_actions = []
         if do:
@@ -85,9 +102,18 @@ class pauseHandleAction():
         return return_actions
                 
 mpv_action = pauseHandleAction(press_keys="space", click=None, in_win_title="", in_exe_path="mpv.exe")
-edge_action = pauseHandleAction(press_keys="", click=True, in_win_title="", in_exe_path="msedge.exe")
+edge_action = pauseHandleAction(press_keys="", click=True, in_win_title=["youtube", "rumble"], in_exe_path="msedge.exe")
 
-actions = [mpv_action, edge_action]
+actions = [ edge_action, mpv_action]
+def do_resume_actions(return_actions):
+    for r in return_actions:
+        for a in r:
+            a()
+        
+# time.sleep(1)
+# ret = [e.check() for e in actions]
+# time.sleep(1)
+# do_resume_actions(ret)
 
 def locate_usb():  # this will check any external Drives
     drive_list = []
@@ -135,7 +161,7 @@ class blockInput():
             # cg = locate_usb()
             # if cg:
             #    break
-            sleep(0.1)
+            time.sleep(0.1)
 
     def __init__(self):
         self.hm = pyHook.HookManager()
@@ -213,7 +239,7 @@ def blockinput_start():
         keyboard.block_key(i)
     while block_input_flag == 1:
         mouse.position = (0, 0)
-        sleep(0.01)
+        time.sleep(0.01)
 
 
 def blockinput_stop():
@@ -245,8 +271,8 @@ if len(args) == 3:
     pop_up_every = int(args[1])
     pop_up_duration = int(args[2])
 pyautogui.FAILSAFE = False
-prev_time = time()
-prev_time2 = time()
+prev_time = time.time()
+prev_time2 = time.time()
 exiting = False
 
 
@@ -260,7 +286,7 @@ def check_key_presses():
             print(e)
             continue
         if x == 'r' or x == "R":
-            prev_time2 = time()
+            prev_time2 = time.time()
             print("Timer resetted")
         elif x == '1':
             pop_up_every -= 60
@@ -306,21 +332,21 @@ thread_reminder_delta = 0
 
 def thread_reminder(seconds, ctx):
 
-    prev_time = time()
+    prev_time = time.time()
     global thread_reminder_delta
     time_string = ""
     print(f"Showing pop up..")
     try:
-        while time() - prev_time < seconds:
+        while time.time() - prev_time < seconds:
             if block_input:
                 blockinput()
-                sleep(1)
+                time.sleep(1)
                 unblockinput()
             else:
-                sleep(1)
+                time.sleep(1)
 
-            thread_reminder_delta = seconds - (time() - prev_time)
-            time_string = f'Pop up will close in:  {format(seconds - (time() - prev_time), ".2f")} seconds'
+            thread_reminder_delta = seconds - (time.time() - prev_time)
+            time_string = f'Pop up will close in:  {format(seconds - (time.time() - prev_time), ".2f")} seconds'
             print(time_string)
             if ctx.window != None:
                 ctx.window['-TEXT-'].update(time_string)
@@ -343,7 +369,7 @@ print("Starting loop..")
 def   press_key_fun(press_key):
     print("pressing key ", press_key)
     pyautogui.press(press_key)
-    sleep(0.1)
+    time.sleep(0.1)
 
 while 1:
     exiting = False
@@ -378,7 +404,7 @@ while 1:
     w = gw.getWindowsWithTitle('Eyes Rest')
     for x in range(5):
         try:
-            sleep(0.1)
+            time.sleep(0.1)
             win32gui.SetForegroundWindow(w[0]._hWnd)
             break
         except:
@@ -400,32 +426,29 @@ while 1:
 
     if thread_reminder_delta != 0 and force_rest_time:
         print("You closed the window but.. ", thread_reminder_delta)
-        prev_time = time()
+        prev_time = time.time()
         if thread_reminder_delta > 0:
-            while time() - prev_time < thread_reminder_delta:
+            while time.time() - prev_time < thread_reminder_delta:
                 if block_input:
                     blockinput()
-                    sleep(1)
+                    time.sleep(1)
                     unblockinput()
                 else:
-                    sleep(1)
+                    time.sleep(1)
                 print(
-                    f"Pause time remaining  {(format(thread_reminder_delta - (time() - prev_time), '.2f'))} seconds")
+                    f"Pause time remaining  {(format(thread_reminder_delta - (time.time() - prev_time), '.2f'))} seconds")
                 
     if aw:
         try:
             print("restoring previous active window ", aw.title)
             win32gui.SetForegroundWindow(aw._hWnd) 
-            sleep(0.1)
+            time.sleep(0.1)
             print("active win", gw.getActiveWindow().title)
         except: 
             print("error restoring active window")
     else: print("not restoring active window because not window")        
 
-
-    for r in return_actions:
-        for a in r:
-            a()
+    do_resume_actions(return_actions)
         
     # if aw and click_on_win_center:
     #     try:
@@ -438,15 +461,15 @@ while 1:
     #     pyautogui.moveTo(mpos)
     #     #winsound.Beep(600, 200)
     
-    prev_time2 = time()
-    while (time() - prev_time2 < pop_up_every):
+    prev_time2 = time.time()
+    while (time.time() - prev_time2 < pop_up_every):
         if play_sound:
-            if pop_up_every - (time() - prev_time2) < 9:
+            if pop_up_every - (time.time() - prev_time2) < 9:
                 print("Playing alarm sound..")
                 try:
                     for x in range(3):
                         winsound.Beep(400, 500)
-                        sleep(0.1)
+                        time.sleep(0.1)
 
                     #playsound(audio_file)
                 except Exception as e:
@@ -456,8 +479,8 @@ while 1:
 
         if exiting:
             sys.exit()
-        delta = pop_up_every - (time() - prev_time2)
-        # + f" Current time: {time():1f}, previous time: {prev_time2:1f}")
+        delta = pop_up_every - (time.time() - prev_time2)
+        # + f" Current time: {time.time():1f}, previous time: {prev_time2:1f}")
         print(f" Time until next pop up: " +
               '{:0>4},'.format(str(datetime.timedelta(seconds=delta))))
-        sleep(5)
+        time.sleep(5)
