@@ -16,6 +16,8 @@ import win32file
 import re
 import win32com.client
 import pythoncom
+import my_utils
+import my_utils.util_
 try:
     import pyHook
 except:
@@ -42,12 +44,56 @@ class context:
 
 ctx = context()
 
+class pauseHandleAction():
+    def __init__(self, press_keys=[], click=False, in_win_title="", in_exe_path="", fun=None) -> None:
+        self.in_win_title = in_win_title
+        self.in_exe_path = in_exe_path
+        self.press_keys = press_keys
+        if not type( self.press_keys) == list or not type(self.press_keys) == tuple:
+            self.press_keys = [self.press_keys]
+        self.click = click
+        self.fun = fun
+    def check(self):
+        path = None
+        title = None
+        if self.in_exe_path and len(self.in_exe_path):
+            path = my_utils.util_.get_path_from_hwd(gw.getActiveWindow()._hWnd)
+        if self.in_win_title and len(self.in_win_title):
+            title = gw.getActiveWindowTitle()
+        
+        do = False or not path and not title
+        
+        if path:
+            if self.in_exe_path in path:
+                do = True
+        if title:
+            if self.in_win_title in title:
+                do = True
+                
+        return_actions = []
+        if do:
+            for k in self.press_keys:
+                pyautogui.press(k)
+                return_actions.append(lambda: print(f"ret action: pressing {k}") or pyautogui.press(k))
+            if self.click:
+                mpos = pyautogui.position()
+                aw = gw.getActiveWindow()
+                pyautogui.click(aw.center)
+                return_actions.append(lambda: print(f"ret action: clicking ") or  pyautogui.click(aw.center))
+                return_actions.append( lambda: print(f"ret action: moveTo {mpos}") or pyautogui.moveTo(mpos))
+
+        return return_actions
+                
+mpv_action = pauseHandleAction(press_keys="space", click=None, in_win_title="", in_exe_path="mpv.exe")
+edge_action = pauseHandleAction(press_keys="", click=True, in_win_title="", in_exe_path="msedge.exe")
+
+actions = [mpv_action, edge_action]
 
 def locate_usb():  # this will check any external Drives
     drive_list = []
     drivebits = win32file.GetLogicalDrives()
     # print(drivebits)
-    for d in range(1, 26):
+    for d in range(1, 26):  
         mask = 1 << d
         if drivebits & mask:
             # here if the drive is at least there
@@ -56,7 +102,7 @@ def locate_usb():  # this will check any external Drives
             if t == win32file.DRIVE_REMOVABLE:
                 drive_list.append(drname)
     return drive_list
-
+      
 
 class blockInput():
     def OnKeyboardEvent(self, event):
@@ -122,9 +168,9 @@ pop_up_every = config.getfloat('PopupSettings', 'Pop up every (minutes)')*60
 pop_up_duration = config.getint('PopupSettings', 'Pop up duration (seconds)')
 play_sound = config.getboolean('PopupSettings', 'Play sound before pop up')
 block_input = config.getboolean('PopupSettings', 'Block mouse and keyboard during pop up')
-press_key = config.get('PopupSettings', 'Press key before and after popup')
-press_key_active = len(press_key)
-click_on_win_center = config.getboolean('PopupSettings', 'Click on center of active window')
+# press_key = config.get('PopupSettings', 'Press key before and after popup')
+# press_key_active = len(press_key)
+# click_on_win_center = config.getboolean('PopupSettings', 'Click on center of active window')
 
 # if os.path.isfile(conf_file):
 #     print("Reading settings file..")
@@ -241,15 +287,15 @@ def check_key_presses():
             global play_sound
             play_sound = not play_sound
             print(f"{'Not p' if not play_sound else 'P'}laying sound before popup")
-        elif x == "p" or x == "P":
-            global press_key_active
-            global press_key
-            press_key_active = not press_key_active
-            print(f"{'Not p' if not press_key_active else 'P'}ressing key  {press_key} before and after popup")
-        elif x == "c" or x == "C":
-            global click_on_win_center
-            click_on_win_center = not click_on_win_center
-            print(f"{'Not c' if not click_on_win_center else 'C'}licking on active window before and after popup")
+        # elif x == "p" or x == "P":
+        #     global press_key_active
+        #     global press_key
+        #     press_key_active = not press_key_active
+        #     print(f"{'Not p' if not press_key_active else 'P'}ressing key  {press_key} before and after popup")
+        # elif x == "c" or x == "C":
+        #     global click_on_win_center
+        #     click_on_win_center = not click_on_win_center
+        #     print(f"{'Not c' if not click_on_win_center else 'C'}licking on active window before and after popup")
 
 
 print("Starting key press checker..")
@@ -304,14 +350,16 @@ while 1:
     # layout = [ [sg.Button('Close')],[sg.Text('', key='-TEXT-', justification='center')] ]
     # window = sg.Window('Eyes rest pop up', layout,size=(size.width, size.height))
     aw = gw.getActiveWindow()
-    mpos = pyautogui.position()
+    #mpos = pyautogui.position()
     print("aw is ", aw.title if aw else "no window")
 
-    if aw and click_on_win_center:
-        pyautogui.click(aw.center)
+    return_actions = [ret.check() for ret in actions]
         
-    if press_key_active:
-        press_key_fun(press_key)
+    # if aw and click_on_win_center:
+    #     pyautogui.click(aw.center)
+        
+    # if press_key_active:
+    #     press_key_fun(press_key)
         
     column_to_be_centered = [[sg.Text('Eyes Rest')],
                              [sg.Text(size=(30, 1), key='-TEXT-')],
@@ -364,8 +412,6 @@ while 1:
                 print(
                     f"Pause time remaining  {(format(thread_reminder_delta - (time() - prev_time), '.2f'))} seconds")
                 
-
-    
     if aw:
         try:
             print("restoring previous active window ", aw.title)
@@ -375,19 +421,23 @@ while 1:
         except: 
             print("error restoring active window")
     else: print("not restoring active window because not window")        
-    
-    if aw and click_on_win_center:
-        try:
-            pyautogui.click(aw.center)
-        except Exception as e:
-            print("Error clicking", e)
-    
-    if press_key_active:
-        press_key_fun(press_key)    
+
+
+    for r in return_actions:
+        for a in r:
+            a()
         
-    if aw and click_on_win_center or block_input:
-        pyautogui.moveTo(mpos)
-        #winsound.Beep(600, 200)
+    # if aw and click_on_win_center:
+    #     try:
+    #         pyautogui.click(aw.center)
+    #     except Exception as e:
+    #         print("Error clicking", e)
+    # if press_key_active:
+    #     press_key_fun(press_key)    
+    # if aw and click_on_win_center or block_input:
+    #     pyautogui.moveTo(mpos)
+    #     #winsound.Beep(600, 200)
+    
     prev_time2 = time()
     while (time() - prev_time2 < pop_up_every):
         if play_sound:
