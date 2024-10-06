@@ -101,7 +101,7 @@ class pauseHandleAction():
 
         return return_actions
                 
-mpv_action = pauseHandleAction(press_keys="space", click=None, in_win_title="", in_exe_path="mpv.exe")
+mpv_action = pauseHandleAction(press_keys="space", click=None, in_win_title="", in_exe_path=["mpv_.exe", "mpv.exe"])
 edge_action = pauseHandleAction(press_keys="", click=True, in_win_title=["youtube", "rumble"], in_exe_path="msedge.exe")
 
 actions = [ edge_action, mpv_action]
