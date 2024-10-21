@@ -63,7 +63,8 @@ class pauseHandleAction():
         need_title = len(self.in_win_title)
         
         if need_path:# and len(self.in_exe_path):
-            path = my_utils.util_.get_path_from_hwd(gw.getActiveWindow()._hWnd)
+            aw = gw.getActiveWindow()
+            path = my_utils.util_.get_path_from_hwd(aw._hWnd) if aw else ""
             in_path = any(item in path for item in self.in_exe_path if len(item))
                 
         if need_title:# and len(self.in_win_title):
