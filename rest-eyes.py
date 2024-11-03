@@ -69,7 +69,7 @@ class pauseHandleAction():
                 
         if need_title:# and len(self.in_win_title):
             title = gw.getActiveWindowTitle()
-            in_title = any(item in title.lower() for item in self.in_win_title if len(item))
+            in_title = any(item in title.lower() for item in self.in_win_title if len(item)) if title else False
 
         do = False
         if need_path and need_title:
