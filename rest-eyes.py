@@ -372,6 +372,7 @@ def   press_key_fun(press_key):
     pyautogui.press(press_key)
     time.sleep(0.1)
 
+do_pause_funcs = False
 while 1:
     exiting = False
     # layout = [ [sg.Button('Close')],[sg.Text('', key='-TEXT-', justification='center')] ]
@@ -379,8 +380,9 @@ while 1:
     aw = gw.getActiveWindow()
     #mpos = pyautogui.position()
     print("aw is ", aw.title if aw else "no window")
-
-    return_actions = [ret.check() for ret in actions]
+    
+    if do_pause_funcs:
+        return_actions = [ret.check() for ret in actions]
         
     # if aw and click_on_win_center:
     #     pyautogui.click(aw.center)
@@ -449,7 +451,8 @@ while 1:
             print("error restoring active window")
     else: print("not restoring active window because not window")        
 
-    do_resume_actions(return_actions)
+    if do_pause_funcs:
+        do_resume_actions(return_actions)
         
     # if aw and click_on_win_center:
     #     try:
