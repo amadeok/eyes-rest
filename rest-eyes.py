@@ -47,14 +47,14 @@ class context:
 ctx = context()
 
 class pauseHandleAction():
-    def __init__(self, press_keys=[], click=False, in_win_title=[], in_exe_path=[], fun=None) -> None:
+    def __init__(self, press_keys=[], click=False, in_win_title=[], in_exe_path=[],  callbacks=[]) -> None:
         to_list = my_utils.util_.to_list
         rem_empty = my_utils.util_.rem_empty_str
         self.in_win_title = rem_empty(to_list(in_win_title))
         self.in_exe_path = rem_empty(to_list(in_exe_path))
         self.press_keys = rem_empty(to_list(press_keys))
         self.click = click
-        self.fun = fun
+        self.callbacks = callbacks
         
     def check(self):
         in_path = None
@@ -99,11 +99,20 @@ class pauseHandleAction():
                 pyautogui.click(aw.center)
                 return_actions.append(lambda: print(f"ret action: clicking ") or  pyautogui.click(aw.center))
                 return_actions.append( lambda: print(f"ret action: moveTo {mpos}") or pyautogui.moveTo(mpos))
-
+            elif len(self.callbacks):
+                self.callbacks[0]()
+                return_actions.append(self.callbacks[1])
         return return_actions
-                
+    
+import PyInterProcCom
+def ws_pause(): print(PyInterProcCom.send_json_to_pipe(r"\\.\pipe\ws_control_host_pipe", { 'operation': "pause"}))
+def ws_play(): print(PyInterProcCom.send_json_to_pipe(r"\\.\pipe\ws_control_host_pipe", { 'operation': "unpause"}))
+
 mpv_action = pauseHandleAction(press_keys="space", click=None, in_win_title="", in_exe_path=["mpv_.exe", "mpv.exe"])
-edge_action = pauseHandleAction(press_keys="", click=True, in_win_title=["youtube", "rumble"], in_exe_path="msedge.exe")
+edge_action = pauseHandleAction(press_keys="", click=False,
+                                in_win_title=["youtube", "rumble"], in_exe_path="msedge.exe",
+                                callbacks=[ws_pause, ws_play]
+                                )
 
 actions = [ edge_action, mpv_action]
 def do_resume_actions(return_actions):
@@ -372,7 +381,7 @@ def   press_key_fun(press_key):
     pyautogui.press(press_key)
     time.sleep(0.1)
 
-do_pause_funcs = False
+do_pause_funcs = True
 while 1:
     exiting = False
     # layout = [ [sg.Button('Close')],[sg.Text('', key='-TEXT-', justification='center')] ]
