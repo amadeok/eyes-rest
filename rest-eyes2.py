@@ -4,6 +4,7 @@ import time, pythoncom
 from pycaw.pycaw import AudioUtilities
 import winsound  # Windows only
 from pynput.keyboard import Key, Controller
+import settingsManager
 import win32api
 import msvcrt
 import my_utils.util_ as ut
@@ -16,18 +17,24 @@ class Context():
     def __init__(self):
         self.was_audio_playing = False
         self.unpause_timer = None
+        self.ignore_procs = []
+        self.settings_man = settingsManager.SettingsManager(defaults={"ignore_procs"}, target=self)
+        self.settings_man.load_settings()
+        
 POP_UP_EVERY = 10 * 60      # seconds (600s = 10 minutes)
 POP_UP_DURATION = 20        # seconds
 CHECK_INTERVAL = 1          # seconds
 
 ctx = Context()
 
+
 # Hook registry: map title -> (pre_hook, post_hook)
 def media_prehook_action():
-    print("media_prehook_action")
-
-    if is_audio_playing():
-        print("Pausing audio")
+    program_playing_audio =  is_audio_playing(ctx.ignore_procs)
+    print("media_prehook_action,", program_playing_audio)
+    
+    if program_playing_audio:
+        print("Pausing audio, program_playing_audio:", program_playing_audio )
         ctx.was_audio_playing = True
         keyboard.press(Key.media_play_pause)
         #time.sleep(0.01)
@@ -46,11 +53,16 @@ def media_posthook_action(window):
             except Exception as e:
                 print(f"Error setting fore, {e}")
                 
-            for x in range(3):
+            for x in range(5):
+                print("Resuming audio attempt: ",x+1)
                 keyboard.press(Key.media_play_pause)
                 time.sleep(0.01)
                 keyboard.release(Key.media_play_pause)
                 time.sleep(0.01)
+                time.sleep(0.5)
+                if is_audio_playing(ctx.ignore_procs):
+                    break
+                
         ctx.was_audio_playing = False
     ctx.unpause_timer = threading.Timer(0.5, task)
     ctx.unpause_timer.start()
@@ -61,19 +73,21 @@ HOOKS = {}
 for elem in ["- mpv", "msedge.exe"]:
     HOOKS[elem] = ( media_prehook_action, media_posthook_action )
 
-def is_audio_playing():
+def is_audio_playing(ignore_procs):
     pythoncom.CoInitialize()
     sessions = AudioUtilities.GetAllSessions()
     for session in sessions:
-        
-        if session.Process and session.Process.name()  == "parsecd.exe":
+        proc_name = session.Process.name() if session.Process and session.Process.name() else None
+        if proc_name  in ignore_procs:
             continue
         if session.State == 1:  # 1 means active
-            return True
+            return proc_name
     return False
 
 
-    
+# while 1:
+#     print( is_audio_playing(ctx.ignore_procs))
+#     time.sleep(0.1)
 import tkinter as tk
 from screeninfo import get_monitors  # You may need: pip install screeninfo
 
@@ -132,7 +146,7 @@ def show_fullscreen_popup(window: gw.Win32Window, duration=POP_UP_DURATION):
 
         label = tk.Label(
             root,
-            text="Eyes rest",
+            text=".",
             font=("Helvetica", 32, "bold"),
             fg="#999999",
             bg="black"
@@ -151,9 +165,10 @@ def show_fullscreen_popup(window: gw.Win32Window, duration=POP_UP_DURATION):
             
     root.after(200, set_fore)
     
-    # Main loop with key polling
+    # print("pre loop")
     try:
-        while not closed_by_user and (time.time() - start_time) < duration:
+        while True:
+        # while not closed_by_user and (time.time() - start_time) < duration:
             # Poll for Escape or Alt
             
             if win32api.GetAsyncKeyState(win32con.VK_ESCAPE) & 0x8000:
@@ -166,7 +181,14 @@ def show_fullscreen_popup(window: gw.Win32Window, duration=POP_UP_DURATION):
             for root in roots:
                 root.update()
             time.sleep(0.01)
-    except tk.TclError:
+            if closed_by_user:
+                print("closed by user")
+                break
+            if (time.time() - start_time) > duration:
+                print("closed by timeout")
+                break
+    except tk.TclError as e:
+        print("--------> Error tlc: ", e)
         pass
     finally:
         if not closed_by_user:
@@ -206,7 +228,7 @@ class MainController:
         
 def main_loop():
     controller = MainController()  # ← Add this
-    last_popup_time = time.time() - POP_UP_EVERY# +5
+    last_popup_time = time.time() - POP_UP_EVERY +5
     print("Eye rest reminder started. Checking every 1 second...")
     print("Press 'p' anytime to pause/resume.")
     beep_scheduled = False
@@ -236,7 +258,7 @@ def main_loop():
                 secs = int(time_until_next % 60)
                 print(f"Next popup in: {mins:02d}:{secs:02d}", end='\r', flush=True)
 
-                if not beep_scheduled and 0 < time_until_next <= 5:
+                if not beep_scheduled and 1 < time_until_next <= 5:
                     beep_scheduled = True
                     for i in range(3):
                         winsound.Beep(800, 300)
