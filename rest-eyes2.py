@@ -17,9 +17,17 @@ class Context():
     def __init__(self):
         self.was_audio_playing = False
         self.unpause_timer = None
+        self.controller = None
         self.ignore_procs = []
-        self.settings_man = settingsManager.SettingsManager(defaults={"ignore_procs"}, target=self)
+        self.block_input = False
+        self.settings_man = settingsManager.SettingsManager(defaults={"ignore_procs", "block_input"}, target=self)
         self.settings_man.load_settings()
+        self.hook = None
+        try:
+            import PyHookCpp
+            self.hook = PyHookCpp.InputHookController()
+        except:
+            print("Failed to import PyHookCpp")
         
 POP_UP_EVERY = 10 * 60      # seconds (600s = 10 minutes)
 POP_UP_DURATION = 20        # seconds
@@ -165,6 +173,11 @@ def show_fullscreen_popup(window: gw.Win32Window, duration=POP_UP_DURATION):
             
     root.after(200, set_fore)
     
+    if ctx.block_input and ctx.hook:
+        ctx.hook.start_hook()
+        time.sleep(0.1)
+        ctx.hook.set_mouse_block(True)
+        ctx.hook.set_keyboard_block(True)
     # print("pre loop")
     try:
         while True:
@@ -176,6 +189,9 @@ def show_fullscreen_popup(window: gw.Win32Window, duration=POP_UP_DURATION):
                 break
             if win32api.GetAsyncKeyState(win32con.VK_MENU) & 0x8000:  # Alt key
                 on_close()
+                if  (win32api.GetAsyncKeyState(win32con.VK_SHIFT) & 0x8000):
+                    print("Pausing..")
+                    ctx.controller.paused = True
                 break
 
             for root in roots:
@@ -191,6 +207,12 @@ def show_fullscreen_popup(window: gw.Win32Window, duration=POP_UP_DURATION):
         print("--------> Error tlc: ", e)
         pass
     finally:
+        if ctx.block_input and ctx.hook:
+            ctx.hook.set_mouse_block(False)
+            ctx.hook.set_keyboard_block(False)
+            time.sleep(0.1)
+            ctx.hook.end_hook()
+            time.sleep(0.1)
         if not closed_by_user:
             if post_hook:
                 post_hook(window)
@@ -199,6 +221,8 @@ def show_fullscreen_popup(window: gw.Win32Window, duration=POP_UP_DURATION):
                     root.destroy()
                 except:
                     pass
+        
+
                 
                 
                 
@@ -218,6 +242,10 @@ class MainController:
                             self.paused = not self.paused
                             state = "PAUSED" if self.paused else "RESUMED"
                             print(f"\nProgram {state}. Press 'p' again to toggle.")
+                    if key == 'b':
+                        ctx.block_input = not ctx.block_input
+                        ctx.settings_man.queue_save()
+                        print("Blocking input: ", ctx.block_input)
                 except Exception as e:
                     print(f"Input thread error: {e}")
         threading.Thread(target=listen, daemon=True, name="InputListener").start()
@@ -227,8 +255,8 @@ class MainController:
             return self.paused
         
 def main_loop():
-    controller = MainController()  # ← Add this
-    last_popup_time = time.time() - POP_UP_EVERY +5
+    ctx.controller = MainController()  # ← Add this
+    last_popup_time = time.time() - POP_UP_EVERY + 5
     print("Eye rest reminder started. Checking every 1 second...")
     print("Press 'p' anytime to pause/resume.")
     beep_scheduled = False
@@ -236,7 +264,7 @@ def main_loop():
     try:
         while True:
             # Respect pause state
-            if controller.is_paused():
+            if ctx.controller.is_paused():
                 print("Paused. Waiting...", end='\r')
                 time.sleep(CHECK_INTERVAL)
                 continue
