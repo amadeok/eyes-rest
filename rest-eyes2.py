@@ -3,14 +3,16 @@ import tkinter as tk, pygetwindow as gw
 import time, pythoncom
 from pycaw.pycaw import AudioUtilities
 import winsound  # Windows only
-from pynput.keyboard import Key, Controller
+# from pynput.keyboard import Key, Controller
 import settingsManager
 import win32api
 import msvcrt
 import my_utils.util_ as ut
 import win32con
 
-keyboard = Controller()
+# keyboard = Controller()
+
+import keyboard
 
 # Configuration
 class Context():
@@ -44,9 +46,11 @@ def media_prehook_action():
     if program_playing_audio:
         print("Pausing audio, program_playing_audio:", program_playing_audio )
         ctx.was_audio_playing = True
-        keyboard.press(Key.media_play_pause)
-        #time.sleep(0.01)
-        keyboard.release(Key.media_play_pause)
+        keyboard.press_and_release('play/pause media')
+
+        # keyboard.press(Key.media_play_pause)
+        # #time.sleep(0.01)
+        # keyboard.release(Key.media_play_pause)
 
 def media_posthook_action(window):
     print("media_posthook_action")
@@ -63,10 +67,11 @@ def media_posthook_action(window):
                 
             for x in range(5):
                 print("Resuming audio attempt: ",x+1)
-                keyboard.press(Key.media_play_pause)
-                time.sleep(0.01)
-                keyboard.release(Key.media_play_pause)
-                time.sleep(0.01)
+                keyboard.press_and_release('play/pause media')
+                # keyboard.press(Key.media_play_pause)
+                # time.sleep(0.01)
+                # keyboard.release(Key.media_play_pause)
+                # time.sleep(0.01)
                 time.sleep(0.5)
                 if is_audio_playing(ctx.ignore_procs):
                     break
