@@ -229,13 +229,42 @@ def show_fullscreen_popup(window: gw.Win32Window, duration=POP_UP_DURATION):
         
 
                 
-                
-                
+import time
+import threading
+
 class MainController:
     def __init__(self):
         self.paused = False
+        self.pause_start_time = None  # Track when pause began
         self.lock = threading.Lock()
+        self.auto_unpause_timer = None
         self._start_input_thread()
+        self.auto_resume_minutes = 30
+
+    def _schedule_auto_unpause(self):
+        # Skip auto-unpause if disabled (auto_resume_minutes == 0)
+        if self.auto_resume_minutes == 0:
+            return
+
+        if self.auto_unpause_timer:
+            self.auto_unpause_timer.cancel()
+        self.auto_unpause_timer = threading.Timer(self.auto_resume_minutes * 60, self._auto_unpause)
+        self.auto_unpause_timer.daemon = True
+        self.auto_unpause_timer.start()
+        # with self.lock:
+        self.pause_start_time = time.time()  # Record pause start
+
+    def _auto_unpause(self):
+        with self.lock:
+            if self.paused:
+                self.paused = False
+                self.pause_start_time = None
+                print(f"\n[Auto-unpause] {self.auto_resume_minutes} minutes elapsed — resuming eye reminders.")
+
+    def _cancel_auto_unpause(self):
+        if self.auto_unpause_timer:
+            self.auto_unpause_timer.cancel()
+            self.auto_unpause_timer = None
 
     def _start_input_thread(self):
         def listen():
@@ -244,9 +273,18 @@ class MainController:
                     key = msvcrt.getch().decode('utf-8').lower()
                     if key == 'p':
                         with self.lock:
-                            self.paused = not self.paused
-                            state = "PAUSED" if self.paused else "RESUMED"
-                            print(f"\nProgram {state}. Press 'p' again to toggle.")
+                            if self.paused:
+                                # Manual unpause
+                                self.paused = False
+                                self.pause_start_time = None
+                                self._cancel_auto_unpause()
+                                print(f"\nProgram RESUMED manually.")
+                            else:
+                                # Manual pause
+                                self.paused = True
+                                self._schedule_auto_unpause()
+                                self.pause_start_time = time.time()
+                                print(f"\nProgram PAUSED." + f" Auto-resume in {self.auto_resume_minutes} minutes." if self.auto_resume_minutes else '')
                     if key == 'b':
                         ctx.block_input = not ctx.block_input
                         ctx.settings_man.queue_save()
@@ -258,9 +296,19 @@ class MainController:
     def is_paused(self):
         with self.lock:
             return self.paused
+
+    def get_time_until_auto_unpause(self):
+        """Returns seconds remaining until auto-unpause, or None if not paused."""
+        if self.auto_resume_minutes == 0:return None
+        with self.lock:
+            if not self.paused or self.pause_start_time is None:
+                return None
+            elapsed = time.time() - self.pause_start_time
+            remaining = self.auto_resume_minutes * 60 - elapsed
+            return max(0, remaining)
         
 def main_loop():
-    ctx.controller = MainController()  # ← Add this
+    ctx.controller = MainController()
     last_popup_time = time.time() - POP_UP_EVERY + 5
     print("Eye rest reminder started. Checking every 1 second...")
     print("Press 'p' anytime to pause/resume.")
@@ -268,11 +316,18 @@ def main_loop():
 
     try:
         while True:
-            # Respect pause state
             if ctx.controller.is_paused():
-                print("Paused. Waiting...", end='\r')
+                remaining = ctx.controller.get_time_until_auto_unpause()
+                if remaining is not None:
+                    mins = int(remaining // 60)
+                    secs = int(remaining % 60)
+                    print(f"PAUSED — Auto-resume in: {mins:02d}:{secs:02d}    ", end='\r', flush=True)
+                else:
+                    print("PAUSED — No auto-resume scheduled.                ", end='\r', flush=True)
                 time.sleep(CHECK_INTERVAL)
                 continue
+
+            # ... rest of your existing loop (popup logic, beep, etc.) ...
 
             now = time.time()
             time_since_last = now - last_popup_time
@@ -289,7 +344,7 @@ def main_loop():
             else:
                 mins = int(time_until_next // 60)
                 secs = int(time_until_next % 60)
-                print(f"Next popup in: {mins:02d}:{secs:02d}", end='\r', flush=True)
+                print(f"Next popup in: {mins:02d}:{secs:02d}    ", end='\r', flush=True)
 
                 if not beep_scheduled and 1 < time_until_next <= 5:
                     beep_scheduled = True
