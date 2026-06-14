@@ -1,361 +1,429 @@
-import threading
-import tkinter as tk, pygetwindow as gw
-import time, pythoncom
-from pycaw.pycaw import AudioUtilities
-import winsound  # Windows only
-# from pynput.keyboard import Key, Controller
-import settingsManager
-import win32api
 import msvcrt
-import my_utils.util_ as ut
-import win32con
-
-# keyboard = Controller()
-
+import threading
+import tkinter as tk
+from tkinter import ttk, messagebox
+import pygetwindow as gw
+import time, json, os
+import pythoncom
+from pycaw.pycaw import AudioUtilities
+import winsound
+import win32api, win32con
 import keyboard
+import my_utils.util_ as ut
+import settingsManager
 
 # Configuration
-class Context():
-    def __init__(self):
-        self.was_audio_playing = False
-        self.unpause_timer = None
-        self.controller = None
-        self.ignore_procs = []
-        self.block_input = False
-        self.settings_man = settingsManager.SettingsManager(defaults={"ignore_procs", "block_input"}, target=self)
-        self.settings_man.load_settings()
-        self.hook = None
-        try:
-            import PyHookCpp
-            self.hook = PyHookCpp.InputHookController()
-        except:
-            print("Failed to import PyHookCpp")
-        
-POP_UP_EVERY = 10 * 60      # seconds (600s = 10 minutes)
-POP_UP_DURATION = 20        # seconds
-CHECK_INTERVAL = 1          # seconds
-
-ctx = Context()
+# POP_UP_EVERY = 10 * 60
+# POP_UP_DURATION = 20
+CHECK_INTERVAL = 1
 
 
-# Hook registry: map title -> (pre_hook, post_hook)
-def media_prehook_action():
-    program_playing_audio =  is_audio_playing(ctx.ignore_procs)
-    print("media_prehook_action,", program_playing_audio)
-    
-    if program_playing_audio:
-        print("Pausing audio, program_playing_audio:", program_playing_audio )
-        ctx.was_audio_playing = True
-        keyboard.press_and_release('play/pause media')
-
-        # keyboard.press(Key.media_play_pause)
-        # #time.sleep(0.01)
-        # keyboard.release(Key.media_play_pause)
-
-def media_posthook_action(window):
-    print("media_posthook_action")
-
-    def task():
-
-        if ctx.was_audio_playing:
-            print("Unpausing media")
-            try:
-                ut.force_foreground(window._hWnd)
-                time.sleep(0.03)
-            except Exception as e:
-                print(f"Error setting fore, {e}")
-                
-            for x in range(5):
-                print("Resuming audio attempt: ",x+1)
-                keyboard.press_and_release('play/pause media')
-                # keyboard.press(Key.media_play_pause)
-                # time.sleep(0.01)
-                # keyboard.release(Key.media_play_pause)
-                # time.sleep(0.01)
-                time.sleep(0.5)
-                if is_audio_playing(ctx.ignore_procs):
-                    break
-                
-        ctx.was_audio_playing = False
-    ctx.unpause_timer = threading.Timer(0.5, task)
-    ctx.unpause_timer.start()
-
-
-HOOKS = {}
-
-for elem in ["- mpv", "msedge.exe"]:
-    HOOKS[elem] = ( media_prehook_action, media_posthook_action )
-
-def is_audio_playing(ignore_procs):
-    pythoncom.CoInitialize()
-    sessions = AudioUtilities.GetAllSessions()
-    for session in sessions:
-        proc_name = session.Process.name() if session.Process and session.Process.name() else None
-        if proc_name  in ignore_procs:
-            continue
-        if session.State == 1:  # 1 means active
-            return proc_name
-    return False
-
-
-# while 1:
-#     print( is_audio_playing(ctx.ignore_procs))
-#     time.sleep(0.1)
-import tkinter as tk
-from screeninfo import get_monitors  # You may need: pip install screeninfo
-
-def show_fullscreen_popup(window: gw.Win32Window, duration=POP_UP_DURATION):
-    monitors = get_monitors()
-    if not monitors:
-        print("No monitors detected!")
-        return
-
-    title = window.title if window else ""
-    print(f"Popup, window was: {title}")
-
-    found = None
-    if title:
-        for k, e in HOOKS.items():
-            try:
-                if ".exe" not in k:
-                    target_string = title.lower()
-                else:
-                    target_string = ut.get_path_from_hwd(window._hWnd)
-                if k.lower() in target_string:
-                    print(f"Found match: {k} -> {target_string}")
-                    found = k
-                    break
-            except Exception as ex:
-                print(f"Failed in hook loop: {ex}")
-
-    pre_hook, post_hook = HOOKS.get(found, (None, None))
-    if pre_hook:
-        pre_hook()
-
-    roots = []
-    closed_by_user = False
-    start_time = time.time()
-
-    def on_close():
-        nonlocal closed_by_user
-        closed_by_user = True
-        if post_hook:
-            post_hook(window)
-        for root in roots:
-            try:
-                root.destroy()
-            except:
-                pass
-
-    # Create popup per monitor
-    for m in monitors:
-        root = tk.Tk()
-        root.title("Eyes rest")
-        root.geometry(f"{m.width}x{m.height}+{m.x}+{m.y}")
-        root.attributes("-topmost", True)
-        root.configure(bg="black")
-        root.overrideredirect(True)
-        root.focus_set()
-
-        label = tk.Label(
-            root,
-            text=".",
-            font=("Helvetica", 32, "bold"),
-            fg="#999999",
-            bg="black"
-        )
-        label.pack(expand=True)
-        roots.append(root)
-
-    # Force foreground once
-    
-    def set_fore():
-        try:
-            print("Set fore")
-            ut.force_foreground(int(roots[0].frame(), 16))
-        except Exception as e:
-            print(f"Foreground error: {e}")
-            
-    root.after(200, set_fore)
-    
-    if ctx.block_input and ctx.hook:
-        ctx.hook.start_hook()
-        time.sleep(0.1)
-        ctx.hook.set_mouse_block(True)
-        ctx.hook.set_keyboard_block(True)
-    # print("pre loop")
-    try:
-        while True:
-        # while not closed_by_user and (time.time() - start_time) < duration:
-            # Poll for Escape or Alt
-            
-            if win32api.GetAsyncKeyState(win32con.VK_ESCAPE) & 0x8000:
-                on_close()
-                break
-            if win32api.GetAsyncKeyState(win32con.VK_MENU) & 0x8000:  # Alt key
-                on_close()
-                if  (win32api.GetAsyncKeyState(win32con.VK_SHIFT) & 0x8000):
-                    print("Pausing..")
-                    ctx.controller.paused = True
-                break
-
-            for root in roots:
-                root.update()
-            time.sleep(0.01)
-            if closed_by_user:
-                print("closed by user")
-                break
-            if (time.time() - start_time) > duration:
-                print("closed by timeout")
-                break
-    except tk.TclError as e:
-        print("--------> Error tlc: ", e)
-        pass
-    finally:
-        if ctx.block_input and ctx.hook:
-            ctx.hook.set_mouse_block(False)
-            ctx.hook.set_keyboard_block(False)
-            time.sleep(0.1)
-            ctx.hook.end_hook()
-            time.sleep(0.1)
-        if not closed_by_user:
-            if post_hook:
-                post_hook(window)
-            for root in roots:
-                try:
-                    root.destroy()
-                except:
-                    pass
-        
-
-                
-import time
-import threading
 
 class MainController:
     def __init__(self):
         self.paused = False
-        self.pause_start_time = None  # Track when pause began
-        self.lock = threading.Lock()
-        self.auto_unpause_timer = None
-        self._start_input_thread()
+        self.pause_start_time = None
         self.auto_resume_minutes = 30
+        self.auto_unpause_timer = None
+        # threading.Thread(target=self._input_listener, daemon=True).start()
 
     def _schedule_auto_unpause(self):
-        # Skip auto-unpause if disabled (auto_resume_minutes == 0)
-        if self.auto_resume_minutes == 0:
-            return
-
-        if self.auto_unpause_timer:
+        if self.auto_resume_minutes and self.auto_unpause_timer:
             self.auto_unpause_timer.cancel()
-        self.auto_unpause_timer = threading.Timer(self.auto_resume_minutes * 60, self._auto_unpause)
-        self.auto_unpause_timer.daemon = True
-        self.auto_unpause_timer.start()
-        # with self.lock:
-        self.pause_start_time = time.time()  # Record pause start
+        if self.auto_resume_minutes:
+            self.auto_unpause_timer = threading.Timer(self.auto_resume_minutes * 60, self._auto_unpause)
+            self.auto_unpause_timer.daemon = True
+            self.auto_unpause_timer.start()
+            self.pause_start_time = time.time()
 
     def _auto_unpause(self):
-        with self.lock:
-            if self.paused:
-                self.paused = False
-                self.pause_start_time = None
-                print(f"\n[Auto-unpause] {self.auto_resume_minutes} minutes elapsed — resuming eye reminders.")
+        if self.paused:
+            self.paused = False
+            self.pause_start_time = None
 
-    def _cancel_auto_unpause(self):
-        if self.auto_unpause_timer:
-            self.auto_unpause_timer.cancel()
-            self.auto_unpause_timer = None
-
-    def _start_input_thread(self):
-        def listen():
-            while True:
-                try:
-                    key = msvcrt.getch().decode('utf-8').lower()
-                    if key == 'p':
-                        with self.lock:
-                            if self.paused:
-                                # Manual unpause
-                                self.paused = False
-                                self.pause_start_time = None
-                                self._cancel_auto_unpause()
-                                print(f"\nProgram RESUMED manually.")
-                            else:
-                                # Manual pause
-                                self.paused = True
-                                self._schedule_auto_unpause()
-                                self.pause_start_time = time.time()
-                                print(f"\nProgram PAUSED." + f" Auto-resume in {self.auto_resume_minutes} minutes." if self.auto_resume_minutes else '')
-                    if key == 'b':
-                        ctx.block_input = not ctx.block_input
-                        ctx.settings_man.queue_save()
-                        print("Blocking input: ", ctx.block_input)
-                except Exception as e:
-                    print(f"Input thread error: {e}")
-        threading.Thread(target=listen, daemon=True, name="InputListener").start()
-
-    def is_paused(self):
-        with self.lock:
-            return self.paused
+    # def _input_listener(self):
+    #     while True:
+    #         try:
+    #             key = msvcrt.getch().decode('utf-8').lower()
+    #             if key == 'p':
+    #                 self.paused = not self.paused
+    #                 if self.paused:
+    #                     self._schedule_auto_unpause()
+    #                 else:
+    #                     if self.auto_unpause_timer:
+    #                         self.auto_unpause_timer.cancel()
+    #             elif key == 'b':
+    #                 self.block_input = not self.block_input
+    #                 self.settings_man.queue_save()
+    #                 print("Blocking input:", self.block_input)
+    #         except:
+    #             pass
 
     def get_time_until_auto_unpause(self):
-        """Returns seconds remaining until auto-unpause, or None if not paused."""
-        if self.auto_resume_minutes == 0:return None
-        with self.lock:
-            if not self.paused or self.pause_start_time is None:
-                return None
-            elapsed = time.time() - self.pause_start_time
-            remaining = self.auto_resume_minutes * 60 - elapsed
-            return max(0, remaining)
-        
-def main_loop():
-    ctx.controller = MainController()
-    last_popup_time = time.time() - POP_UP_EVERY + 5
-    print("Eye rest reminder started. Checking every 1 second...")
-    print("Press 'p' anytime to pause/resume.")
-    beep_scheduled = False
+        if not self.paused or not self.pause_start_time or not self.auto_resume_minutes:
+            return None
+        remaining = self.auto_resume_minutes * 60 - (time.time() - self.pause_start_time)
+        return max(0, remaining)
 
-    try:
+class EyeRestApp:
+    def __init__(self):
+
+        self.controller = MainController()
+        self.settings = self.load_settings()
+        self.popup_count = 0
+        self.session_start = time.time()
+        self.total_break_time = 0
+        
+        self.root = tk.Tk()
+        self.root.title("👁️ Eye Rest Reminder")
+        self.root.geometry("400x600")
+        self.root.configure(bg="#2b2b2b")
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
+        self.ignore_procs = []
+                
+        self.block_var = tk.BooleanVar(value=False)
+        self.beep_var = tk.BooleanVar(value=True)
+        self.interval_var = tk.DoubleVar(value=10)
+        self.duration_var = tk.IntVar(value=20)
+        self.resume_var = tk.IntVar(value=0)
+
+        def task(*args): self.last_popup_time = time.time()
+        self.interval_var.trace_add("write", task)
+
+        self.settings_man = settingsManager.SettingsManager(defaults={"ignore_procs", "block_var", "interval_var", 
+                                                                       "duration_var", "resume_var"}, target=self)
+        self.settings_man.load_settings()
+        self.last_popup_time = time.time() - self.pop_up_every + 5
+
+        self._create_widgets()
+        self.center_window()
+        
+        self.HOOKS = {elem: (self.media_prehook_action, self.media_posthook_action) for elem in ["- mpv", "msedge.exe"]}
+        threading.Thread(target=self._main_loop, daemon=True).start()
+        threading.Thread(target=self._update_display, daemon=True).start()
+        self.was_audio_playing = False
+        self.unpause_timer = None
+
+        self.hook = None
+        try:
+            from loge2.hook_mp import MouseHookManager
+            self.hook = MouseHookManager(lambda *args: 1, run_on_other_process=1)
+            self.hook.start()
+        except Exception as e:
+            print("Failed to import hook", e)
+        self.root.mainloop()
+
+    
+
+    @property
+    def pop_up_every(self):
+        try:
+            return max(self.interval_var.get(), 0.5) * 60
+        except Exception as e:
+            # print("Error in pop_up_every", e)
+            return 10 * 60
+
+    def _block_input(self):
+        keyboard.hook(lambda e: None, suppress=True)
+        self.hook.block()
+
+    def unblock_input(self):
+        keyboard.unhook_all()
+        self.hook.unblock()
+    
+    @property
+    def block_input(self):
+        return self.block_var.get()
+        
+    def load_settings(self):
+        defaults = {"popup_interval": 600, "popup_duration": 20, "auto_resume_minutes": 30, 
+                   "block_input": True, "beep_warning": True}
+        try:
+            if os.path.exists("eye_rest_settings.json"):
+                with open("eye_rest_settings.json") as f:
+                    saved = json.load(f)
+                    defaults.update(saved)
+        except: pass
+        return defaults
+
+    def save_settings(self):
+        try:
+            with open("eye_rest_settings.json", "w") as f:
+                json.dump(self.settings, f, indent=2)
+        except: pass
+
+    def _create_widgets(self):
+        colors = {"bg": "#2b2b2b", "fg": "#ffffff", "btn_bg": "#3c3c3c", "entry_bg": "#3c3c3c"}
+        
+        # Header
+        tk.Label(self.root, text="👁️ Eye Rest Reminder", font=("Arial", 16, "bold"),
+                bg=colors["bg"], fg=colors["fg"]).pack(pady=10)
+        
+        # Status Frame
+        status_frame = tk.Frame(self.root, bg=colors["bg"])
+        status_frame.pack(pady=10, fill="x", padx=20)
+        
+        self.status_label = tk.Label(status_frame, text="Status: Active", font=("Arial", 12),
+                                     bg=colors["bg"], fg="#4CAF50")
+        self.status_label.pack()
+        
+        self.time_label = tk.Label(status_frame, text="Next break: --:--", font=("Arial", 14, "bold"),
+                                   bg=colors["bg"], fg=colors["fg"])
+        self.time_label.pack(pady=5)
+        
+        ttk.Separator(self.root, orient='horizontal').pack(fill='x', pady=10, padx=20)
+        
+        # Settings Frame
+        settings_frame = tk.LabelFrame(self.root, text="⚙️ Settings", font=("Arial", 11, "bold"),
+                                       bg=colors["bg"], fg=colors["fg"], padx=15, pady=10)
+        settings_frame.pack(pady=10, fill="x", padx=20)
+        
+
+
+        # Popup Interval
+        tk.Label(settings_frame, text="Popup Interval (minutes):", font=("Arial", 10),
+                bg=colors["bg"], fg=colors["fg"]).grid(row=0, column=0, sticky="w", pady=5)
+
+        interval_entry = tk.Entry(settings_frame, textvariable=self.interval_var, width=10,
+                                  bg=colors["entry_bg"], fg=colors["fg"])
+        interval_entry.grid(row=0, column=1, padx=10, pady=5)
+        
+        # Popup Duration
+        tk.Label(settings_frame, text="Popup Duration (seconds):", font=("Arial", 10),
+                bg=colors["bg"], fg=colors["fg"]).grid(row=1, column=0, sticky="w", pady=5)
+        duration_entry = tk.Entry(settings_frame, textvariable=self.duration_var, width=10,
+                                  bg=colors["entry_bg"], fg=colors["fg"])
+        duration_entry.grid(row=1, column=1, padx=10, pady=5)
+        
+        # Auto Resume
+        tk.Label(settings_frame, text="Auto-resume (minutes, 0=off):", font=("Arial", 10),
+                bg=colors["bg"], fg=colors["fg"]).grid(row=2, column=0, sticky="w", pady=5)
+        resume_entry = tk.Entry(settings_frame, textvariable=self.resume_var, width=10,
+                                bg=colors["entry_bg"], fg=colors["fg"])
+        resume_entry.grid(row=2, column=1, padx=10, pady=5)
+        
+        # # Checkboxes
+        # self.block_var.set(self.settings["block_input"])
+        # self.beep_var.set(self.settings["beep_warning"])
+        
+        tk.Checkbutton(settings_frame, text="Block input during break", variable=self.block_var,
+                      bg=colors["bg"], fg=colors["fg"], selectcolor=colors["bg"]).grid(
+                      row=3, column=0, columnspan=2, sticky="w", pady=5)
+        
+        tk.Checkbutton(settings_frame, text="Beep warning before popup", variable=self.beep_var,
+                      bg=colors["bg"], fg=colors["fg"], selectcolor=colors["bg"]).grid(
+                      row=4, column=0, columnspan=2, sticky="w", pady=5)
+        
+        
+        ttk.Separator(self.root, orient='horizontal').pack(fill='x', pady=10, padx=20)
+        
+        # Control Buttons Frame
+        btn_frame = tk.Frame(self.root, bg=colors["bg"])
+        btn_frame.pack(pady=10)
+        
+        self.pause_btn = tk.Button(btn_frame, text="⏸️ Pause", command=self.toggle_pause,
+                                  font=("Arial", 11), bg=colors["btn_bg"], fg=colors["fg"], width=12)
+        self.pause_btn.pack(side="left", padx=5)
+        
+        tk.Button(btn_frame, text="📊 Stats", command=self.open_stats,
+                 font=("Arial", 11), bg=colors["btn_bg"], fg=colors["fg"], width=12).pack(side="left", padx=5)
+        
+        ttk.Separator(self.root, orient='horizontal').pack(fill='x', pady=10, padx=20)
+        
+        # Tips
+        info = tk.Label(self.root, text="💡 Tips:\n• Press 'p' to pause/resume\n• Press 'b' to toggle input blocking",
+                       font=("Arial", 9), bg=colors["bg"], fg=colors["fg"], justify="left")
+        info.pack(pady=10, fill="both", expand=True, padx=20)
+        
+        # Version
+        tk.Label(self.root, text="v2.0", font=("Arial", 8), bg=colors["bg"], fg="gray").pack(side="bottom", pady=5)
+
+
+    def toggle_pause(self):
+        self.controller.paused = not self.controller.paused
+        self.pause_btn.config(text="▶️ Resume" if self.controller.paused else "⏸️ Pause")
+        if not self.controller.paused and self.controller.auto_unpause_timer:
+            self.controller.auto_unpause_timer.cancel()
+
+    def open_stats(self):
+        win = tk.Toplevel(self.root)
+        win.title("Statistics")
+        win.geometry("350x250")
+        win.configure(bg="#2b2b2b")
+        win.transient(self.root)
+        
+        session_mins = int((time.time() - self.session_start) / 60)
+        stats = [
+            ("Session Duration:", f"{session_mins} minutes"),
+            ("Breaks Taken:", self.popup_count),
+            ("Total Rest Time:", f"{int(self.total_break_time / 60)} minutes"),
+            ("Status:", "Paused" if self.controller.paused else "Active")
+        ]
+        
+        for i, (label, value) in enumerate(stats):
+            tk.Label(win, text=label, font=("Arial", 10, "bold"), bg="#2b2b2b", fg="white"
+                    ).grid(row=i, column=0, sticky="w", padx=20, pady=5)
+            tk.Label(win, text=str(value), font=("Arial", 10), bg="#2b2b2b", fg="white"
+                    ).grid(row=i, column=1, sticky="w", padx=10, pady=5)
+        
+        def reset():
+            self.popup_count = 0
+            self.session_start = time.time()
+            self.total_break_time = 0
+            win.destroy()
+            messagebox.showinfo("Stats Reset", "Statistics reset!")
+        
+        tk.Button(win, text="Reset Stats", command=reset, bg="#FF9800", fg="white",
+                 padx=20).grid(row=4, column=0, columnspan=2, pady=20)
+
+    def center_window(self):
+        self.root.update_idletasks()
+        x = (self.root.winfo_screenwidth() - self.root.winfo_width()) // 2
+        y = (self.root.winfo_screenheight() - self.root.winfo_height()) // 2
+        self.root.geometry(f"+{x}+{y}")
+
+    def show_popup(self, window):
+        found = None
+        if window.title:
+            for k in self.HOOKS.keys():
+                try:
+                    target = window.title.lower() if ".exe" not in k else ut.get_path_from_hwd(window._hWnd)
+                    if k.lower() in target:
+                        found = k
+                        break
+                except: pass
+        
+        pre_hook, post_hook = self.HOOKS.get(found, (None, None))
+        if pre_hook:
+            pre_hook()
+        
+        from screeninfo import get_monitors
+        roots = []
+        closed_by_user = False
+        start_time = time.time()
+        
+        def on_close():
+            nonlocal closed_by_user
+            closed_by_user = True
+            if post_hook:
+                post_hook(window)
+            for r in roots:
+                try: r.destroy()
+                except: pass
+        
+        for m in get_monitors() or [type('', (), {'width': 1920, 'height': 1080, 'x': 0, 'y': 0})()]:
+            root = tk.Tk()
+            root.geometry(f"{m.width}x{m.height}+{m.x}+{m.y}")
+            root.attributes("-topmost", True)
+            root.configure(bg="black")
+            root.overrideredirect(True)
+            tk.Label(root, text=".", font=("Helvetica", 32, "bold"), fg="#999999", bg="black"
+                    ).pack(expand=True)
+            roots.append(root)
+        
+        if self.block_input and self.hook:
+            self._block_input()
+        
+        try:
+            while not closed_by_user and (time.time() - start_time) < self.duration_var.get():
+                if win32api.GetAsyncKeyState(win32con.VK_ESCAPE) & 0x8000 or win32api.GetAsyncKeyState(win32con.VK_MENU) & 0x8000:
+                    on_close()
+                    break
+                for root in roots:
+                    root.update()
+                time.sleep(0.01)
+        except: pass
+        finally:
+            if self.block_input and self.hook:
+                self.unblock_input()
+            if not closed_by_user and post_hook:
+                post_hook(window)
+            for root in roots:
+                try: root.destroy()
+                except: pass
+
+    def _main_loop(self):
+        beep_scheduled = False
         while True:
-            if ctx.controller.is_paused():
-                remaining = ctx.controller.get_time_until_auto_unpause()
-                if remaining is not None:
-                    mins = int(remaining // 60)
-                    secs = int(remaining % 60)
-                    print(f"PAUSED — Auto-resume in: {mins:02d}:{secs:02d}    ", end='\r', flush=True)
-                else:
-                    print("PAUSED — No auto-resume scheduled.                ", end='\r', flush=True)
+            if self.controller.paused:
                 time.sleep(CHECK_INTERVAL)
                 continue
-
-            # ... rest of your existing loop (popup logic, beep, etc.) ...
-
+            
             now = time.time()
-            time_since_last = now - last_popup_time
-            time_until_next = POP_UP_EVERY - time_since_last
-
-            if time_until_next <= 0:
+            if now - self.last_popup_time >= self.pop_up_every:
                 try:
-                    window = gw.getActiveWindow()
-                    show_fullscreen_popup(window, duration=POP_UP_DURATION)
-                    last_popup_time = time.time()
+                    self.show_popup(gw.getActiveWindow())
+                    self.last_popup_time = now
+                    self.popup_count += 1
+                    self.total_break_time += self.duration_var.get()
                     beep_scheduled = False
                 except Exception as e:
-                    print(f"Error at main loop: {e}")
-            else:
-                mins = int(time_until_next // 60)
-                secs = int(time_until_next % 60)
-                print(f"Next popup in: {mins:02d}:{secs:02d}    ", end='\r', flush=True)
-
-                if not beep_scheduled and 1 < time_until_next <= 5:
-                    beep_scheduled = True
-                    for i in range(3):
-                        winsound.Beep(800, 300)
-                        time.sleep(0.2)
-
+                    print(f"Error: {e}")
+            elif self.settings["beep_warning"] and not beep_scheduled and 1 < (self.pop_up_every - (now - self.last_popup_time)) <= 5:
+                beep_scheduled = True
+                for _ in range(3):
+                    winsound.Beep(800, 300)
+                    time.sleep(0.2)
             time.sleep(CHECK_INTERVAL)
 
-    except KeyboardInterrupt:
-        print("\nExiting...")
+    def _update_display(self):
+        while True:
+            try:
+                if self.root.winfo_exists():
+                    if self.controller.paused:
+                        remaining = self.controller.get_time_until_auto_unpause()
+                        text = f"Auto-resume: {int(remaining//60):02d}:{int(remaining%60):02d}" if remaining else "Paused"
+                        self.status_label.config(text="Status: Paused", fg="#FF9800")
+                        self.time_label.config(text=text)
+                    else:
+                        remaining = max(0, self.pop_up_every - (time.time() - self.last_popup_time))
+                        self.status_label.config(text="Status: Active", fg="#4CAF50")
+                        self.time_label.config(text=f"Next break: {int(remaining//60):02d}:{int(remaining%60):02d}")
+                time.sleep(0.5)
+            except: break
+
+    def on_closing(self):
+        if messagebox.askokcancel("Quit", "Quit Eye Rest Reminder?"):
+            self.root.destroy()
+            import sys
+            sys.exit(0)
+
+
+    def is_audio_playing(self, ignore_procs):
+
+        pythoncom.CoInitialize()
+        sessions = AudioUtilities.GetAllSessions()
+        for session in sessions:
+            proc_name = session.Process.name() if session.Process and session.Process.name() else None
+            if proc_name not in ignore_procs and session.State == 1:
+                return proc_name
+        return False
+
+    def media_prehook_action(self):
+        program_playing_audio = self.is_audio_playing(self.ignore_procs)
+        if program_playing_audio:
+            self.was_audio_playing = True
+            keyboard.press_and_release('play/pause media')
+
+    def media_posthook_action(self, window):
+        def task():
+            if self.was_audio_playing:
+                try:
+                    ut.force_foreground(window._hWnd)
+                    time.sleep(0.03)
+                except Exception as e:
+                    print(f"Error setting fore, {e}")
+                for _ in range(5):
+                    keyboard.press_and_release('play/pause media')
+                    time.sleep(0.5)
+                    if self.is_audio_playing(self.ignore_procs):
+                        break
+            self.was_audio_playing = False
+        self.unpause_timer = threading.Timer(0.5, task)
+        self.unpause_timer.start()
+
+    
 
 if __name__ == "__main__":
-    main_loop()
+    app = EyeRestApp()
