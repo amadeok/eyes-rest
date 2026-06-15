@@ -18,15 +18,7 @@ import settingsManager
 CHECK_INTERVAL = 1
 
 
-
-class MainController:
-    def __init__(self):
-        self.paused = False
-        self.pause_start_time = None
-        self.auto_resume_minutes = 30
-        self.auto_unpause_timer = None
-        # threading.Thread(target=self._input_listener, daemon=True).start()
-
+class EyeRestApp:
     def _schedule_auto_unpause(self):
         if self.auto_resume_minutes and self.auto_unpause_timer:
             self.auto_unpause_timer.cancel()
@@ -41,34 +33,23 @@ class MainController:
             self.paused = False
             self.pause_start_time = None
 
-    # def _input_listener(self):
-    #     while True:
-    #         try:
-    #             key = msvcrt.getch().decode('utf-8').lower()
-    #             if key == 'p':
-    #                 self.paused = not self.paused
-    #                 if self.paused:
-    #                     self._schedule_auto_unpause()
-    #                 else:
-    #                     if self.auto_unpause_timer:
-    #                         self.auto_unpause_timer.cancel()
-    #             elif key == 'b':
-    #                 self.block_input = not self.block_input
-    #                 self.settings_man.queue_save()
-    #                 print("Blocking input:", self.block_input)
-    #         except:
-    #             pass
-
     def get_time_until_auto_unpause(self):
         if not self.paused or not self.pause_start_time or not self.auto_resume_minutes:
             return None
         remaining = self.auto_resume_minutes * 60 - (time.time() - self.pause_start_time)
         return max(0, remaining)
-
-class EyeRestApp:
+    
+    @property
+    def auto_resume_minutes(self):
+        return self.resume_var.get()
+    
     def __init__(self):
+        self.paused = False
+        self.pause_start_time = None
 
-        self.controller = MainController()
+        self.auto_unpause_timer = None
+        # threading.Thread(target=self._input_listener, daemon=True).start()
+
         self.settings = self.load_settings()
         self.popup_count = 0
         self.session_start = time.time()
@@ -241,10 +222,12 @@ class EyeRestApp:
 
 
     def toggle_pause(self):
-        self.controller.paused = not self.controller.paused
-        self.pause_btn.config(text="▶️ Resume" if self.controller.paused else "⏸️ Pause")
-        if not self.controller.paused and self.controller.auto_unpause_timer:
-            self.controller.auto_unpause_timer.cancel()
+        self.paused = not self.paused
+        if self.paused:
+            self.pause_start_time = time.time()
+        self.pause_btn.config(text="▶️ Resume" if self.paused else "⏸️ Pause")
+        if not self.paused and self.auto_unpause_timer:
+            self.auto_unpause_timer.cancel()
 
     def open_stats(self):
         win = tk.Toplevel(self.root)
@@ -258,7 +241,7 @@ class EyeRestApp:
             ("Session Duration:", f"{session_mins} minutes"),
             ("Breaks Taken:", self.popup_count),
             ("Total Rest Time:", f"{int(self.total_break_time / 60)} minutes"),
-            ("Status:", "Paused" if self.controller.paused else "Active")
+            ("Status:", "Paused" if self.paused else "Active")
         ]
         
         for i, (label, value) in enumerate(stats):
@@ -346,7 +329,7 @@ class EyeRestApp:
     def _main_loop(self):
         beep_scheduled = False
         while True:
-            if self.controller.paused:
+            if self.paused:
                 time.sleep(CHECK_INTERVAL)
                 continue
             
@@ -371,11 +354,19 @@ class EyeRestApp:
         while True:
             try:
                 if self.root.winfo_exists():
-                    if self.controller.paused:
-                        remaining = self.controller.get_time_until_auto_unpause()
-                        text = f"Auto-resume: {int(remaining//60):02d}:{int(remaining%60):02d}" if remaining else "Paused"
-                        self.status_label.config(text="Status: Paused", fg="#FF9800")
-                        self.time_label.config(text=text)
+                    if self.paused:
+                        remaining = self.get_time_until_auto_unpause()
+                        if remaining and remaining > 0:
+                            # Show auto-resume countdown
+                            mins = int(remaining // 60)
+                            secs = int(remaining % 60)
+                            text = f"Auto-resume: {mins:02d}:{secs:02d}"
+                            self.status_label.config(text=f"Status: Paused - {text}", fg="#FF9800")
+                            self.time_label.config(text="")
+                        else:
+                            # Paused without auto-resume or timer expired
+                            self.status_label.config(text="Status: Paused", fg="#FF9800")
+                            self.time_label.config(text="")
                     else:
                         remaining = max(0, self.pop_up_every - (time.time() - self.last_popup_time))
                         self.status_label.config(text="Status: Active", fg="#4CAF50")
