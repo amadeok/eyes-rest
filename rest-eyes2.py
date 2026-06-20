@@ -8,7 +8,8 @@ import pythoncom
 from pycaw.pycaw import AudioUtilities
 import winsound
 import win32api, win32con
-import keyboard
+# import keyboard
+import loge2.bg_keyboard  as keyboard
 import my_utils.util_ as ut
 import settingsManager
 
@@ -85,7 +86,7 @@ class EyeRestApp:
         threading.Thread(target=self._update_display, daemon=True).start()
         self.was_audio_playing = False
         self.unpause_timer = None
-
+        
         self.hook = None
         try:
             from loge2.hook_mp import MouseHookManager
@@ -93,6 +94,7 @@ class EyeRestApp:
             self.hook.start()
         except Exception as e:
             print("Failed to import hook", e)
+        self.popup_shown = threading.Event()
         self.root.mainloop()
 
     
@@ -106,11 +108,11 @@ class EyeRestApp:
             return 10 * 60
 
     def _block_input(self):
-        keyboard.hook(lambda e: None, suppress=True)
+        keyboard.hook(lambda e: self.popup_shown.is_set(), suppress=True)
         self.hook.block()
 
     def unblock_input(self):
-        keyboard.unhook_all()
+        # keyboard.unhook_all()
         self.hook.unblock()
     
     @property
@@ -268,6 +270,7 @@ class EyeRestApp:
 
     def show_popup(self, window):
         found = None
+        self.popup_shown.set()
         if window.title:
             for k in self.HOOKS.keys():
                 try:
@@ -287,6 +290,7 @@ class EyeRestApp:
         start_time = time.time()
         
         def on_close():
+            self.popup_shown.clear()
             nonlocal closed_by_user
             closed_by_user = True
             if post_hook:
