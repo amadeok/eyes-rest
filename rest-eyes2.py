@@ -108,7 +108,13 @@ class EyeRestApp:
             return 10 * 60
 
     def _block_input(self):
-        keyboard.hook(lambda e: self.popup_shown.is_set(), suppress=True)
+        def task(e):
+            print(self.popup_shown.is_set())
+            if self.popup_shown.is_set():
+                return False
+            return True
+        
+        keyboard.hook(task, suppress=True)
         self.hook.block()
 
     def unblock_input(self):
@@ -322,6 +328,7 @@ class EyeRestApp:
                 time.sleep(0.01)
         except: pass
         finally:
+            self.popup_shown.clear()
             if self.block_input and self.hook:
                 self.unblock_input()
             if not closed_by_user and post_hook:
