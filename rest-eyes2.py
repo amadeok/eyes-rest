@@ -9,7 +9,8 @@ from pycaw.pycaw import AudioUtilities
 import winsound
 import win32api, win32con
 # import keyboard
-import loge2.bg_keyboard  as keyboard
+import loge2.bg_keyboard  as bg_keyboard
+from  keyboard import press_and_release
 import my_utils.util_ as ut
 import settingsManager
 
@@ -87,6 +88,15 @@ class EyeRestApp:
         self.was_audio_playing = False
         self.unpause_timer = None
         
+        def task(e):
+            return
+            # print(self.popup_shown.is_set())
+            if  self.block_input and self.popup_shown.is_set() :
+                return False
+            return True
+        
+        # bg_keyboard.hook(task)
+        
         self.hook = None
         try:
             from loge2.hook_mp import MouseHookManager
@@ -108,17 +118,11 @@ class EyeRestApp:
             return 10 * 60
 
     def _block_input(self):
-        def task(e):
-            print(self.popup_shown.is_set())
-            if self.popup_shown.is_set():
-                return False
-            return True
-        
-        keyboard.hook(task, suppress=True)
+        bg_keyboard.block_all_keys()
         self.hook.block()
 
     def unblock_input(self):
-        # keyboard.unhook_all()
+        bg_keyboard.unblock_all_keys()
         self.hook.unblock()
     
     @property
@@ -318,15 +322,21 @@ class EyeRestApp:
         if self.block_input and self.hook:
             self._block_input()
         
+        def is_key_pressed(key):
+            return bg_keyboard.is_pressed(key)
+            return win32api.GetAsyncKeyState(key) & 0x8000 #win32con.VK_ESCAPE # win32con.VK_MENU
         try:
             while not closed_by_user and (time.time() - start_time) < self.duration_var.get():
-                if win32api.GetAsyncKeyState(win32con.VK_ESCAPE) & 0x8000 or win32api.GetAsyncKeyState(win32con.VK_MENU) & 0x8000:
-                    on_close()
-                    break
+                # if any(is_key_pressed(key) for key in ["esc", "alt"]):
+                #     print("canceled by keypress ")
+                #     on_close()
+                #     break
                 for root in roots:
                     root.update()
                 time.sleep(0.01)
-        except: pass
+        except Exception as e:
+            print(e)
+            pass
         finally:
             self.popup_shown.clear()
             if self.block_input and self.hook:
@@ -386,10 +396,10 @@ class EyeRestApp:
             except: break
 
     def on_closing(self):
-        if messagebox.askokcancel("Quit", "Quit Eye Rest Reminder?"):
-            self.root.destroy()
-            import sys
-            sys.exit(0)
+        # if messagebox.askokcancel("Quit", "Quit Eye Rest Reminder?"):
+        self.root.destroy()
+        import sys
+        sys.exit(0)
 
 
     def is_audio_playing(self, ignore_procs):
@@ -406,7 +416,7 @@ class EyeRestApp:
         program_playing_audio = self.is_audio_playing(self.ignore_procs)
         if program_playing_audio:
             self.was_audio_playing = True
-            keyboard.press_and_release('play/pause media')
+            press_and_release('play/pause media')
 
     def media_posthook_action(self, window):
         def task():
@@ -417,7 +427,7 @@ class EyeRestApp:
                 except Exception as e:
                     print(f"Error setting fore, {e}")
                 for _ in range(5):
-                    keyboard.press_and_release('play/pause media')
+                    press_and_release('play/pause media')
                     time.sleep(0.5)
                     if self.is_audio_playing(self.ignore_procs):
                         break
