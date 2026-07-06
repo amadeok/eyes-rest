@@ -114,17 +114,23 @@ class EyeRestApp:
         try:
             return max(self.interval_var.get(), 0.5) * 60
         except Exception as e:
-            # print("Error in pop_up_every", e)
+            # print("Error in pop_up_every", e)#
             return 10 * 60
 
     def _block_input(self):
-        bg_keyboard.block_all_keys()
-        self.hook.block()
+        def task():
+            bg_keyboard.set_block_all(1)
+            if self.hook:
+                self.hook.block()
+        threading.Thread(target=task, daemon=True).start()
 
     def unblock_input(self):
-        bg_keyboard.unblock_all_keys()
-        self.hook.unblock()
-    
+        def task():
+            bg_keyboard.set_block_all(0)
+            if self.hook:
+                self.hook.unblock()
+        threading.Thread(target=task, daemon=True).start()
+
     @property
     def block_input(self):
         return self.block_var.get()
@@ -319,7 +325,7 @@ class EyeRestApp:
                     ).pack(expand=True)
             roots.append(root)
         
-        if self.block_input and self.hook:
+        if self.block_input:
             self._block_input()
         
         def is_key_pressed(key):
@@ -327,10 +333,11 @@ class EyeRestApp:
             return win32api.GetAsyncKeyState(key) & 0x8000 #win32con.VK_ESCAPE # win32con.VK_MENU
         try:
             while not closed_by_user and (time.time() - start_time) < self.duration_var.get():
-                # if any(is_key_pressed(key) for key in ["esc", "alt"]):
-                #     print("canceled by keypress ")
-                #     on_close()
-                #     break
+                if not self.block_input:
+                    if any(is_key_pressed(key) for key in ["esc", "alt"]):
+                        print("canceled by keypress ")
+                        on_close()
+                        break
                 for root in roots:
                     root.update()
                 time.sleep(0.01)
@@ -339,7 +346,7 @@ class EyeRestApp:
             pass
         finally:
             self.popup_shown.clear()
-            if self.block_input and self.hook:
+            if self.block_input:
                 self.unblock_input()
             if not closed_by_user and post_hook:
                 post_hook(window)
