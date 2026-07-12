@@ -7,6 +7,7 @@ import time, json, os
 import pythoncom
 from pycaw.pycaw import AudioUtilities
 import winsound
+import pywinstyles
 import win32api, win32con
 # import keyboard
 import loge2.bg_keyboard  as bg_keyboard
@@ -237,6 +238,7 @@ class EyeRestApp:
         
         # Version
         tk.Label(self.root, text="v2.0", font=("Arial", 8), bg=colors["bg"], fg="gray").pack(side="bottom", pady=5)
+        pywinstyles.apply_style( self.root, "dark")
 
 
     def toggle_pause(self):
