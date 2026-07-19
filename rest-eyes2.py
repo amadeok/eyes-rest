@@ -14,6 +14,8 @@ import loge2.bg_keyboard  as bg_keyboard
 from  keyboard import press_and_release
 import my_utils.util_ as ut
 import settingsManager
+import pystray
+from PIL import Image, ImageDraw
 
 # Configuration
 # POP_UP_EVERY = 10 * 60
@@ -106,6 +108,7 @@ class EyeRestApp:
         except Exception as e:
             print("Failed to import hook", e)
         self.popup_shown = threading.Event()
+        self._setup_tray()
         self.root.mainloop()
 
     
@@ -404,11 +407,49 @@ class EyeRestApp:
                 time.sleep(0.5)
             except: break
 
-    def on_closing(self):
-        # if messagebox.askokcancel("Quit", "Quit Eye Rest Reminder?"):
+    def _create_tray_image(self):
+        """Create a simple eye icon for the system tray."""
+        width = 64
+        height = 64
+        image = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(image)
+        # Draw a simple eye shape
+        draw.ellipse([8, 16, 56, 48], fill='white', outline='white')
+        draw.ellipse([20, 24, 44, 40], fill='#2b2b2b', outline='#2b2b2b')
+        draw.ellipse([26, 30, 38, 34], fill='white', outline='white')
+        return image
+
+    def _setup_tray(self):
+        """Set up the system tray icon."""
+        icon_image = self._create_tray_image()
+        menu = pystray.Menu(
+            pystray.MenuItem('Show', self.show_window, default=True),
+            pystray.MenuItem('Exit', self.quit_app)
+        )
+        self.tray_icon = pystray.Icon('eye_rest', icon_image, 'Eye Rest Reminder', menu)
+        threading.Thread(target=self.tray_icon.run, daemon=True).start()
+
+    def show_window(self, icon=None, item=None):
+        """Restore the main window from the system tray."""
+        self.root.after(0, self._show_window)
+
+    def _show_window(self):
+        """Actually restore the window (called on main thread)."""
+        self.root.deiconify()
+        self.root.lift()
+        self.root.focus_force()
+
+    def quit_app(self, icon=None, item=None):
+        """Cleanly exit the application."""
+        if self.tray_icon:
+            self.tray_icon.stop()
         self.root.destroy()
         import sys
         sys.exit(0)
+
+    def on_closing(self):
+        """Minimize to tray instead of closing."""
+        self.root.withdraw()
 
 
     def is_audio_playing(self, ignore_procs):
